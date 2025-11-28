@@ -221,7 +221,7 @@ export default function PrayersScreen() {
           </View>
         </LinearGradient>
       }>
-      <Animated.View entering={FadeInDown.duration(600)}>
+      <Animated.View entering={FadeInDown.duration(600)} style={{ marginBottom: 4 }}>
         <ThemedView style={styles.infoCard}>
           <IconSymbol size={24} name="bell.fill" color={palette.accent} />
           <ThemedText style={styles.infoText}>
@@ -236,7 +236,7 @@ export default function PrayersScreen() {
           <ThemedText style={styles.loadingText}>Loading prayer reminders...</ThemedText>
         </View>
       ) : (
-        <Animated.View entering={FadeInUp.delay(80).duration(600)}>
+        <Animated.View entering={FadeInUp.delay(80).duration(600)} style={{ marginBottom: 4 }}>
           <ScrollView style={styles.prayersList}>
             {prayers.map((prayer, index) => (
               <Animated.View key={prayer.id} entering={FadeInUp.delay(index * 60).duration(400)}>

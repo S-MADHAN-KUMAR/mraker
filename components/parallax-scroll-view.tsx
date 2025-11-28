@@ -1,11 +1,11 @@
 import type { PropsWithChildren, ReactElement } from 'react';
-import { StyleSheet } from 'react-native';
 import Animated, {
   interpolate,
   useAnimatedRef,
   useAnimatedStyle,
   useScrollOffset,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedView } from '@/components/themed-view';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -25,8 +25,13 @@ export default function ParallaxScrollView({
 }: Props) {
   const backgroundColor = useThemeColor({}, 'background');
   const colorScheme = useColorScheme() ?? 'light';
+  const insets = useSafeAreaInsets();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollOffset(scrollRef);
+  
+  // Tab bar height (80px) + bottom margin (16px) + safe area bottom + extra padding (16px)
+  const bottomPadding = 80 + 16 + insets.bottom + 16;
+  
   const headerAnimatedStyle = useAnimatedStyle(() => {
     return {
       transform: [
@@ -48,32 +53,18 @@ export default function ParallaxScrollView({
     <Animated.ScrollView
       ref={scrollRef}
       style={{ backgroundColor, flex: 1 }}
+      contentContainerStyle={{ paddingBottom: bottomPadding }}
       scrollEventThrottle={16}>
       <Animated.View
         style={[
-          styles.header,
+          { height: HEADER_HEIGHT, overflow: 'hidden' },
           { backgroundColor: headerBackgroundColor[colorScheme] },
           headerAnimatedStyle,
         ]}>
         {headerImage}
       </Animated.View>
-      <ThemedView style={styles.content}>{children}</ThemedView>
+      <ThemedView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 24, gap: 0 }}>{children}</ThemedView>
     </Animated.ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    height: HEADER_HEIGHT,
-    overflow: 'hidden',
-  },
-  content: {
-    flex: 1,
-    padding: 32,
-    gap: 16,
-    overflow: 'hidden',
-  },
-});

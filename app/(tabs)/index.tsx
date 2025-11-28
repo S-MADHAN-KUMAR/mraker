@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import ParallaxScrollView from '@/components/parallax-scroll-view';
@@ -132,7 +133,7 @@ export default function HomeScreen() {
           <View style={styles.heroHeaderContent}>
             <ThemedText style={styles.heroEyebrow}>Pulse dashboard</ThemedText>
             <ThemedText type="title" style={styles.heroTitle}>
-              Welcome back, Ejaz
+              Assalamu Alaikum Ejaz
             </ThemedText>
             <ThemedText style={styles.heroSubtitle}>
               Your unified command center for savings, expenses, work, and dua.
@@ -140,7 +141,7 @@ export default function HomeScreen() {
           </View>
         </LinearGradient>
       }>
-      <Animated.View entering={FadeInDown.duration(650)}>
+      <Animated.View entering={FadeInDown.duration(650)} style={{ marginBottom: 20 }}>
         <LinearGradient colors={[palette.card, palette.cardElevated]} style={styles.balanceCard}>
           <View style={styles.balanceHeader}>
             <View>
@@ -158,7 +159,14 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           {loading ? (
-            <ActivityIndicator size="large" color={palette.accent} />
+            <View style={styles.loadingContainer}>
+              <Image
+                source={require('@/assets/yapapa.gif')}
+                style={styles.loaderGif}
+                contentFit="contain"
+              />
+              <ThemedText style={styles.loadingText}>Loading balance...</ThemedText>
+            </View>
           ) : (
             <ThemedText type="title" style={styles.balanceAmount}>
               ₹{balance.toFixed(2)}
@@ -177,7 +185,7 @@ export default function HomeScreen() {
         </LinearGradient>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(100).duration(600)}>
+      <Animated.View entering={FadeInDown.delay(100).duration(600)} style={{ marginBottom: 20 }}>
         <ThemedView style={styles.metricsContainer}>
           {metrics.map((metric) => (
             <View key={metric.label} style={styles.metricCard}>
@@ -189,7 +197,7 @@ export default function HomeScreen() {
         </ThemedView>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(120).duration(600)}>
+      <Animated.View entering={FadeInUp.delay(120).duration(600)} style={{ marginBottom: 20 }}>
         <ThemedView style={styles.formContainer}>
           <View style={styles.formHeader}>
             <View>
@@ -258,47 +266,65 @@ const createStyles = (palette: ThemeColorSet) =>
       height: '100%',
       width: '100%',
       padding: 32,
+      paddingBottom: 40,
       justifyContent: 'flex-end',
     },
     heroGlow: {
       position: 'absolute',
-      width: 220,
-      height: 220,
+      width: 240,
+      height: 240,
       borderRadius: 200,
       backgroundColor: palette.accent,
-      opacity: 0.25,
-      top: 40,
-      right: -60,
+      opacity: 0.2,
+      top: 30,
+      right: -50,
     },
     heroHeaderContent: {
-      gap: 8,
+      gap: 12,
+      zIndex: 1,
     },
     heroEyebrow: {
-      fontSize: 12,
+      fontSize: 11,
       textTransform: 'uppercase',
-      letterSpacing: 2,
+      letterSpacing: 3,
       color: palette.muted,
+      fontWeight: '600',
     },
     heroTitle: {
-      fontSize: 34,
+      fontSize: 32,
+      fontWeight: '800',
+      letterSpacing: -0.5,
+      flexWrap: 'wrap',
+      lineHeight: 40,
     },
     heroSubtitle: {
       color: palette.muted,
-      maxWidth: 260,
-      lineHeight: 20,
+      maxWidth: 300,
+      lineHeight: 22,
+      fontSize: 15,
+      flexWrap: 'wrap',
+      marginTop: 4,
     },
     balanceCard: {
-      borderRadius: 28,
-      padding: 24,
+      borderRadius: 32,
+      padding: 28,
       borderWidth: 1,
       borderColor: palette.border,
-      overflow: 'hidden',
+      overflow: 'visible',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 8,
+      marginHorizontal: 0,
     },
     balanceHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 12,
+      alignItems: 'flex-start',
+      marginBottom: 16,
+      flexWrap: 'wrap',
+      gap: 8,
     },
     balanceEyebrow: {
       color: palette.muted,
@@ -319,11 +345,12 @@ const createStyles = (palette: ThemeColorSet) =>
       flexDirection: 'row',
       alignItems: 'center',
       borderRadius: 999,
-      paddingHorizontal: 16,
-      paddingVertical: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
       backgroundColor: palette.surface,
       borderWidth: 1,
       borderColor: palette.border,
+      minHeight: 36,
     },
     refreshText: {
       marginLeft: 6,
@@ -332,12 +359,17 @@ const createStyles = (palette: ThemeColorSet) =>
     },
     balanceAmount: {
       fontSize: 48,
-      marginVertical: 8,
+      marginVertical: 16,
+      fontWeight: '800',
+      letterSpacing: -1,
+      flexWrap: 'wrap',
     },
     balanceMetaRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginTop: 16,
+      marginTop: 20,
+      gap: 16,
+      flexWrap: 'wrap',
     },
     metaLabel: {
       fontSize: 12,
@@ -351,51 +383,77 @@ const createStyles = (palette: ThemeColorSet) =>
     metricsContainer: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 12,
+      gap: 14,
+      marginHorizontal: 0,
     },
     metricCard: {
       flex: 1,
-      minWidth: 100,
-      padding: 16,
-      borderRadius: 20,
+      minWidth: '30%',
+      maxWidth: '48%',
+      padding: 20,
+      borderRadius: 24,
       borderWidth: 1,
       borderColor: palette.border,
       backgroundColor: palette.card,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 4,
+      overflow: 'visible',
     },
     metricLabel: {
       color: palette.muted,
-      fontSize: 12,
+      fontSize: 11,
       textTransform: 'uppercase',
       letterSpacing: 1,
+      marginBottom: 8,
+      flexWrap: 'wrap',
     },
     metricValue: {
-      fontSize: 22,
-      fontWeight: '700',
-      marginVertical: 8,
+      fontSize: 24,
+      fontWeight: '800',
+      marginVertical: 10,
+      flexWrap: 'wrap',
     },
     metricHelper: {
-      fontSize: 12,
+      fontSize: 11,
+      marginTop: 4,
+      flexWrap: 'wrap',
     },
     formContainer: {
-      borderRadius: 28,
+      borderRadius: 32,
       borderWidth: 1,
       borderColor: palette.border,
-      padding: 20,
+      padding: 24,
       backgroundColor: palette.card,
-      gap: 18,
+      gap: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 6,
+      overflow: 'visible',
+      marginHorizontal: 0,
     },
     formHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'center',
+      alignItems: 'flex-start',
+      gap: 12,
+      flexWrap: 'wrap',
     },
     sectionTitle: {
       fontSize: 22,
+      fontWeight: '700',
+      flexWrap: 'wrap',
     },
     sectionSubtitle: {
       color: palette.muted,
       fontSize: 14,
-      marginTop: 4,
+      marginTop: 6,
+      flexWrap: 'wrap',
+      lineHeight: 20,
     },
     inputWrapper: {
       flexDirection: 'row',
@@ -405,37 +463,43 @@ const createStyles = (palette: ThemeColorSet) =>
       borderWidth: 1,
       borderColor: palette.border,
       paddingHorizontal: 16,
+      paddingVertical: 4,
       backgroundColor: palette.surface,
+      minHeight: 56,
     },
     amountInput: {
       flex: 1,
       fontSize: 18,
       paddingVertical: 14,
       color: palette.text,
+      minHeight: 48,
     },
     quickActions: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 10,
+      marginTop: 4,
     },
     quickChip: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
+      paddingHorizontal: 18,
+      paddingVertical: 12,
       borderRadius: 999,
       borderWidth: 1,
       borderColor: palette.border,
       backgroundColor: palette.surface,
+      minHeight: 40,
     },
     quickChipText: {
       fontSize: 13,
       fontWeight: '600',
     },
     quickChipGhost: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
+      paddingHorizontal: 18,
+      paddingVertical: 12,
       borderRadius: 999,
       borderWidth: 1,
       borderColor: palette.accent,
+      minHeight: 40,
     },
     quickChipGhostText: {
       color: palette.accent,
@@ -461,5 +525,22 @@ const createStyles = (palette: ThemeColorSet) =>
     },
     buttonDisabled: {
       opacity: 0.6,
+    },
+    loadingContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 24,
+      gap: 16,
+      minHeight: 180,
+    },
+    loaderGif: {
+      width: 100,
+      height: 100,
+    },
+    loadingText: {
+      fontSize: 14,
+      color: palette.muted,
+      fontWeight: '500',
+      marginTop: 4,
     },
   });

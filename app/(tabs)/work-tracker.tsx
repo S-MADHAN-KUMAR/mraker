@@ -287,7 +287,7 @@ export default function WorkTrackerScreen() {
           </View>
         </LinearGradient>
       }>
-      <Animated.View entering={FadeInDown.duration(600)}>
+      <Animated.View entering={FadeInDown.duration(600)} style={{ marginBottom: 4 }}>
         <LinearGradient colors={[palette.card, palette.cardElevated]} style={styles.titleContainer}>
           <View>
             <ThemedText style={styles.heroEyebrow}>This month</ThemedText>
@@ -312,7 +312,7 @@ export default function WorkTrackerScreen() {
         </LinearGradient>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(60).duration(600)}>
+      <Animated.View entering={FadeInDown.delay(60).duration(600)} style={{ marginBottom: 4 }}>
         <ThemedView style={styles.selectorContainer}>
           <ThemedView style={styles.selectorRow}>
             <ThemedText style={styles.selectorLabel}>Month</ThemedText>
@@ -348,7 +348,7 @@ export default function WorkTrackerScreen() {
       </Animated.View>
 
       {/* Add Work Form */}
-      <Animated.View entering={FadeInDown.delay(120).duration(600)}>
+      <Animated.View entering={FadeInDown.delay(120).duration(600)} style={{ marginBottom: 4 }}>
         <ThemedView style={styles.formContainer}>
         <ThemedView style={styles.formTitle}>
           <IconSymbol size={20} name="plus.circle.fill" color="#0a7ea4" />
@@ -490,7 +490,7 @@ export default function WorkTrackerScreen() {
       </Animated.View>
 
       {/* Work Entries List */}
-      <Animated.View entering={FadeInUp.delay(160).duration(600)}>
+      <Animated.View entering={FadeInUp.delay(160).duration(600)} style={{ marginBottom: 4 }}>
         <ThemedView style={styles.listContainer}>
         <ThemedView style={styles.listTitle}>
           <IconSymbol size={20} name="list.bullet" color="#0a7ea4" />

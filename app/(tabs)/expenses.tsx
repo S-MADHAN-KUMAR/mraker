@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator, View } from 'react-native';
+import { useState, useEffect } from 'react';
+import { ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
@@ -30,7 +30,6 @@ export default function ExpensesScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const colorScheme = useColorScheme();
   const palette = Colors[colorScheme ?? 'dark'];
-  const styles = useMemo(() => createStyles(palette), [palette]);
 
   useEffect(() => {
     fetchExpenses();
@@ -127,72 +126,79 @@ export default function ExpensesScreen() {
     <ParallaxScrollView
       headerBackgroundColor={{ light: Colors.light.background, dark: Colors.dark.background }}
       headerImage={
-        <LinearGradient colors={Gradients.pulse} style={styles.headerGradient}>
+        <LinearGradient colors={Gradients.pulse} style={{ flex: 1, padding: 32, justifyContent: 'flex-end' }}>
           <IconSymbol size={160} name="creditcard.fill" color="rgba(255,255,255,0.08)" />
-          <View style={styles.headerCopy}>
-            <ThemedText style={styles.headerEyebrow}>Spending radar</ThemedText>
-            <ThemedText type="title" style={styles.headerTitle}>
+          <View style={{ gap: 8, maxWidth: 280 }}>
+            <ThemedText style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: palette.muted }}>Spending radar</ThemedText>
+            <ThemedText type="title" style={{ fontSize: 32 }}>
               Control your outgoing flow
             </ThemedText>
-            <ThemedText style={styles.headerSubtitle}>
+            <ThemedText style={{ color: palette.muted, lineHeight: 20 }}>
               Daily vs monthly burn in one clean surface.
             </ThemedText>
           </View>
         </LinearGradient>
       }>
-      <Animated.View entering={FadeInDown.duration(600)}>
-        <View style={styles.summaryRow}>
-          <LinearGradient colors={[palette.card, palette.cardElevated]} style={styles.summaryCard}>
+      <Animated.View entering={FadeInDown.duration(600)} style={{ marginBottom: 4 }}>
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 0 }}>
+          <LinearGradient colors={[palette.card, palette.cardElevated]} style={{ flex: 1, borderRadius: 24, padding: 18, borderWidth: 1, borderColor: palette.border, gap: 12, minWidth: 0 }}>
             <IconSymbol size={24} name="sun.max.fill" color={palette.warning} />
-            <ThemedText style={styles.summaryLabel}>Daily burn</ThemedText>
-            <ThemedText style={styles.summaryValue}>₹{dailyTotal.toFixed(2)}</ThemedText>
+            <ThemedText style={{ fontSize: 14, color: palette.muted }}>Daily burn</ThemedText>
+            <ThemedText style={{ fontSize: 26, fontWeight: '700' }}>₹{dailyTotal.toFixed(2)}</ThemedText>
           </LinearGradient>
-          <LinearGradient colors={[palette.card, palette.cardElevated]} style={styles.summaryCard}>
+          <LinearGradient colors={[palette.card, palette.cardElevated]} style={{ flex: 1, borderRadius: 24, padding: 18, borderWidth: 1, borderColor: palette.border, gap: 12, minWidth: 0 }}>
             <IconSymbol size={24} name="calendar" color={palette.info} />
-            <ThemedText style={styles.summaryLabel}>Monthly commitments</ThemedText>
-            <ThemedText style={styles.summaryValue}>₹{monthlyTotal.toFixed(2)}</ThemedText>
+            <ThemedText style={{ fontSize: 14, color: palette.muted }}>Monthly commitments</ThemedText>
+            <ThemedText style={{ fontSize: 26, fontWeight: '700' }}>₹{monthlyTotal.toFixed(2)}</ThemedText>
           </LinearGradient>
         </View>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(80).duration(600)}>
-        <ThemedView style={styles.formContainer}>
-          <View style={styles.sectionHeader}>
+      <Animated.View entering={FadeInDown.delay(80).duration(600)} style={{ marginBottom: 4 }}>
+        <ThemedView style={{ borderRadius: 28, borderWidth: 1, borderColor: palette.border, padding: 20, gap: 16, backgroundColor: palette.card }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View>
-              <ThemedText type="subtitle" style={styles.sectionTitle}>
+              <ThemedText type="subtitle" style={{ fontSize: 22 }}>
                 Log an expense
               </ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>Categorized by rhythm.</ThemedText>
+              <ThemedText style={{ color: palette.muted, marginTop: 4 }}>Categorized by rhythm.</ThemedText>
             </View>
             <IconSymbol size={24} name="plus.circle.fill" color={palette.accent} />
           </View>
 
-          <View style={styles.typeSelector}>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
             {(['daily', 'monthly'] as const).map((type) => (
               <TouchableOpacity
                 key={type}
-                style={[styles.typeChip, expenseType === type && styles.typeChipActive]}
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  paddingVertical: 12,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: expenseType === type ? palette.accent : palette.border,
+                  backgroundColor: expenseType === type ? palette.accent : palette.surface,
+                }}
                 onPress={() => setExpenseType(type)}>
                 <IconSymbol
                   size={18}
                   name={type === 'daily' ? 'sun.max.fill' : 'calendar'}
                   color={expenseType === type ? '#fff' : palette.icon}
                 />
-                <ThemedText
-                  style={[
-                    styles.typeChipText,
-                    expenseType === type && styles.typeChipTextActive,
-                  ]}>
+                <ThemedText style={{ fontWeight: '600', color: expenseType === type ? '#fff' : palette.text }}>
                   {type === 'daily' ? 'Daily' : 'Monthly'}
                 </ThemedText>
               </TouchableOpacity>
             ))}
           </View>
 
-          <View style={styles.inputBlock}>
-            <ThemedText style={styles.inputLabel}>Name</ThemedText>
+          <View style={{ width: '100%' }}>
+            <ThemedText style={{ fontSize: 13, color: palette.muted, marginBottom: 6 }}>Name</ThemedText>
             <TextInput
-              style={styles.inputControl}
+              style={{ borderRadius: 18, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: palette.surface, color: palette.text, fontSize: 16 }}
               value={name}
               onChangeText={setName}
               placeholder="Groceries, Rent, Coffee..."
@@ -200,11 +206,11 @@ export default function ExpensesScreen() {
             />
           </View>
 
-          <View style={styles.inputRow}>
-            <View style={styles.inputBlock}>
-              <ThemedText style={styles.inputLabel}>Amount</ThemedText>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontSize: 13, color: palette.muted, marginBottom: 6 }}>Amount</ThemedText>
               <TextInput
-                style={styles.inputControl}
+                style={{ borderRadius: 18, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: palette.surface, color: palette.text, fontSize: 16 }}
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="decimal-pad"
@@ -212,10 +218,10 @@ export default function ExpensesScreen() {
                 placeholderTextColor={palette.muted}
               />
             </View>
-            <View style={styles.inputBlock}>
-              <ThemedText style={styles.inputLabel}>Date</ThemedText>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontSize: 13, color: palette.muted, marginBottom: 6 }}>Date</ThemedText>
               <TextInput
-                style={styles.inputControl}
+                style={{ borderRadius: 18, borderWidth: 1, borderColor: palette.border, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: palette.surface, color: palette.text, fontSize: 16 }}
                 value={selectedDate}
                 onChangeText={setSelectedDate}
                 placeholder="YYYY-MM-DD"
@@ -225,16 +231,16 @@ export default function ExpensesScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.gradientButton, adding && styles.buttonDisabled]}
+            style={{ borderRadius: 20, overflow: 'hidden', opacity: adding ? 0.6 : 1 }}
             disabled={adding}
             onPress={handleAddExpense}>
-            <LinearGradient colors={[palette.accent, palette.accentSecondary]} style={styles.gradientInner}>
+            <LinearGradient colors={[palette.accent, palette.accentSecondary]} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, gap: 8 }}>
               {adding ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
                   <IconSymbol size={20} name="checkmark.circle.fill" color="#fff" />
-                  <ThemedText style={styles.buttonText}>Save expense</ThemedText>
+                  <ThemedText style={{ color: '#fff', fontWeight: '600' }}>Save expense</ThemedText>
                 </>
               )}
             </LinearGradient>
@@ -242,14 +248,14 @@ export default function ExpensesScreen() {
         </ThemedView>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(120).duration(600)}>
-        <ThemedView style={styles.listContainer}>
-          <View style={styles.sectionHeader}>
+      <Animated.View entering={FadeInUp.delay(120).duration(600)} style={{ marginBottom: 4 }}>
+        <ThemedView style={{ borderRadius: 28, borderWidth: 1, borderColor: palette.border, padding: 20, gap: 16, backgroundColor: palette.card }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View>
-              <ThemedText type="subtitle" style={styles.sectionTitle}>
+              <ThemedText type="subtitle" style={{ fontSize: 22 }}>
                 Latest activity
               </ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>
+              <ThemedText style={{ color: palette.muted, marginTop: 4 }}>
                 {expenses.length} item{expenses.length === 1 ? '' : 's'} tracked
               </ThemedText>
             </View>
@@ -257,45 +263,50 @@ export default function ExpensesScreen() {
           </View>
 
           {loading ? (
-            <View style={styles.stateCard}>
+            <View style={{ alignItems: 'center', gap: 8, paddingVertical: 20 }}>
               <ActivityIndicator color={palette.accent} />
-              <ThemedText style={styles.stateText}>Loading spend...</ThemedText>
+              <ThemedText style={{ fontSize: 16, fontWeight: '600' }}>Loading spend...</ThemedText>
             </View>
           ) : expenses.length === 0 ? (
-            <View style={styles.stateCard}>
+            <View style={{ alignItems: 'center', gap: 8, paddingVertical: 20 }}>
               <IconSymbol size={42} name="tray" color={palette.muted} />
-              <ThemedText style={styles.stateText}>No expenses yet</ThemedText>
-              <ThemedText style={styles.stateSubtext}>Capture your first one above.</ThemedText>
+              <ThemedText style={{ fontSize: 16, fontWeight: '600' }}>No expenses yet</ThemedText>
+              <ThemedText style={{ color: palette.muted }}>Capture your first one above.</ThemedText>
             </View>
           ) : (
-            <ScrollView style={styles.expensesList}>
+            <ScrollView style={{ maxHeight: 420 }}>
               {expenses.map((expense) => (
-                <View key={expense.id} style={styles.expenseItem}>
-                  <View style={styles.expenseLeft}>
+                <View key={expense.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderColor: palette.border }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                     <View
-                      style={[
-                        styles.expenseBadge,
-                        expense.type === 'daily' ? styles.badgeDaily : styles.badgeMonthly,
-                      ]}>
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        borderRadius: 999,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        backgroundColor: expense.type === 'daily' ? palette.warning : palette.info,
+                      }}>
                       <IconSymbol
                         size={16}
                         name={expense.type === 'daily' ? 'sun.max.fill' : 'calendar'}
                         color="#fff"
                       />
-                      <ThemedText style={styles.badgeText}>{expense.type}</ThemedText>
+                      <ThemedText style={{ color: '#fff', fontSize: 12, textTransform: 'uppercase' }}>{expense.type}</ThemedText>
                     </View>
                     <View>
-                      <ThemedText style={styles.expenseName}>{expense.name}</ThemedText>
-                      <ThemedText style={styles.expenseDate}>
+                      <ThemedText style={{ fontSize: 16, fontWeight: '600' }}>{expense.name}</ThemedText>
+                      <ThemedText style={{ color: palette.muted, fontSize: 12, marginTop: 4 }}>
                         {new Date(expense.date).toLocaleDateString()}
                       </ThemedText>
                     </View>
                   </View>
-                  <View style={styles.expenseRight}>
-                    <ThemedText style={styles.expenseAmount}>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <ThemedText style={{ fontSize: 18, fontWeight: '700', color: palette.danger }}>
                       ₹{parseFloat(expense.amount.toString()).toFixed(2)}
                     </ThemedText>
-                    <TouchableOpacity onPress={() => handleDeleteExpense(expense.id)} style={styles.deleteButton}>
+                    <TouchableOpacity onPress={() => handleDeleteExpense(expense.id)} style={{ padding: 6, borderRadius: 12, backgroundColor: palette.surface }}>
                       <IconSymbol size={18} name="trash.fill" color={palette.danger} />
                     </TouchableOpacity>
                   </View>
@@ -309,214 +320,3 @@ export default function ExpensesScreen() {
   );
 }
 
-const createStyles = (palette: ThemeColorSet) =>
-  StyleSheet.create({
-    headerGradient: {
-      flex: 1,
-      padding: 32,
-      justifyContent: 'flex-end',
-    },
-    headerCopy: {
-      gap: 8,
-      maxWidth: 280,
-    },
-    headerEyebrow: {
-      fontSize: 12,
-      letterSpacing: 2,
-      textTransform: 'uppercase',
-      color: palette.muted,
-    },
-    headerTitle: {
-      fontSize: 32,
-    },
-    headerSubtitle: {
-      color: palette.muted,
-      lineHeight: 20,
-    },
-    summaryRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    summaryCard: {
-      flex: 1,
-      borderRadius: 24,
-      padding: 18,
-      borderWidth: 1,
-      borderColor: palette.border,
-      gap: 12,
-    },
-    summaryLabel: {
-      fontSize: 14,
-      color: palette.muted,
-    },
-    summaryValue: {
-      fontSize: 26,
-      fontWeight: '700',
-    },
-    formContainer: {
-      borderRadius: 28,
-      borderWidth: 1,
-      borderColor: palette.border,
-      padding: 20,
-      gap: 16,
-      backgroundColor: palette.card,
-    },
-    sectionHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    sectionTitle: {
-      fontSize: 22,
-    },
-    sectionSubtitle: {
-      color: palette.muted,
-      marginTop: 4,
-    },
-    typeSelector: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    typeChip: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      paddingVertical: 12,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: palette.border,
-      backgroundColor: palette.surface,
-    },
-    typeChipActive: {
-      backgroundColor: palette.accent,
-      borderColor: palette.accent,
-    },
-    typeChipText: {
-      fontWeight: '600',
-      color: palette.text,
-    },
-    typeChipTextActive: {
-      color: '#fff',
-    },
-    inputBlock: {
-      width: '100%',
-    },
-    inputRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    inputLabel: {
-      fontSize: 13,
-      color: palette.muted,
-      marginBottom: 6,
-    },
-    inputControl: {
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: palette.border,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      backgroundColor: palette.surface,
-      color: palette.text,
-      fontSize: 16,
-    },
-    gradientButton: {
-      borderRadius: 20,
-      overflow: 'hidden',
-    },
-    gradientInner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 14,
-      gap: 8,
-    },
-    buttonText: {
-      color: '#fff',
-      fontWeight: '600',
-    },
-    buttonDisabled: {
-      opacity: 0.6,
-    },
-    listContainer: {
-      borderRadius: 28,
-      borderWidth: 1,
-      borderColor: palette.border,
-      padding: 20,
-      gap: 16,
-      backgroundColor: palette.card,
-    },
-    stateCard: {
-      alignItems: 'center',
-      gap: 8,
-      paddingVertical: 20,
-    },
-    stateText: {
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    stateSubtext: {
-      color: palette.muted,
-    },
-    expensesList: {
-      maxHeight: 420,
-    },
-    expenseItem: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 16,
-      borderBottomWidth: 1,
-      borderColor: palette.border,
-    },
-    expenseLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      flex: 1,
-    },
-    expenseBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-    },
-    badgeDaily: {
-      backgroundColor: palette.warning,
-    },
-    badgeMonthly: {
-      backgroundColor: palette.info,
-    },
-    badgeText: {
-      color: '#fff',
-      fontSize: 12,
-      textTransform: 'uppercase',
-    },
-    expenseName: {
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    expenseDate: {
-      color: palette.muted,
-      fontSize: 12,
-      marginTop: 4,
-    },
-    expenseRight: {
-      alignItems: 'flex-end',
-      gap: 6,
-    },
-    expenseAmount: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: palette.danger,
-    },
-    deleteButton: {
-      padding: 6,
-      borderRadius: 12,
-      backgroundColor: palette.surface,
-    },
-  });

@@ -156,7 +156,7 @@ export default function SavingsScreen() {
           </View>
         </LinearGradient>
       }>
-      <Animated.View entering={FadeInDown.duration(600)}>
+      <Animated.View entering={FadeInDown.duration(600)} style={{ marginBottom: 4 }}>
         <LinearGradient colors={[palette.card, palette.cardElevated]} style={styles.heroCard}>
           <View style={styles.heroTopRow}>
             <View>
@@ -189,7 +189,7 @@ export default function SavingsScreen() {
         </LinearGradient>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(80).duration(600)}>
+      <Animated.View entering={FadeInDown.delay(80).duration(600)} style={{ marginBottom: 4 }}>
         <ThemedView style={styles.formContainer}>
           <View style={styles.sectionHeader}>
             <View>
@@ -276,7 +276,7 @@ export default function SavingsScreen() {
         </ThemedView>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(120).duration(600)}>
+      <Animated.View entering={FadeInUp.delay(120).duration(600)} style={{ marginBottom: 4 }}>
         <ThemedView style={styles.listContainer}>
           <View style={styles.sectionHeader}>
             <View>

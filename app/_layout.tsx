@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -67,11 +68,13 @@ export default function RootLayout() {
   };
 
   return (
-    <AuthProvider>
-      <ThemeProvider value={isDark ? ModernDarkTheme : ModernLightTheme}>
-        <RootLayoutNav />
-        <StatusBar style={isDark ? 'light' : 'dark'} animated backgroundColor="transparent" />
-      </ThemeProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <ThemeProvider value={isDark ? ModernDarkTheme : ModernLightTheme}>
+          <RootLayoutNav />
+          <StatusBar style={isDark ? 'light' : 'dark'} animated backgroundColor="transparent" />
+        </ThemeProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
