@@ -12,11 +12,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 // Tab image mappings
 const TAB_IMAGES = {
-  home: require('@/assets/images/tab-icons/home.jpeg'),
-  savings: require('@/assets/images/tab-icons/savings.jpeg'),
-  work: require('@/assets/images/tab-icons/remainder.jpeg'),
-  expenses: require('@/assets/images/tab-icons/logo.png'),
-  prayers: require('@/assets/images/tab-icons/namaz.jpeg'),
+  home: require('@/assets/images/home.webp'),
+  savings: require('@/assets/images/saving.webp'),
+  work: require('@/assets/images/work.png'),
+  expenses: require('@/assets/images/expences.png'),
+  prayers: require('@/assets/images/remainder.webp'),
 } as const;
 
 export default function TabLayout() {
@@ -33,18 +33,23 @@ export default function TabLayout() {
       const iconSize = isHome ? 48 : 40;
       const containerSize = isHome ? 56 : 48;
 
+      const animatedOpacity = useAnimatedStyle(() => ({
+        opacity: withSpring(focused ? 1 : 0.4, { damping: 15 }),
+      }));
+
       return (
         <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
           <Animated.View style={[animatedStyle, { alignItems: 'center', justifyContent: 'center', width: containerSize, height: containerSize }]}>
-            <Image
-              source={TAB_IMAGES[imageKey]}
-              style={[
-                { width: iconSize, height: iconSize, borderRadius: iconSize / 2 },
-                focused && { borderColor: palette.accent, borderWidth: 3 },
-              ]}
-              contentFit="cover"
-              transition={200}
-            />
+            <Animated.View style={animatedOpacity}>
+              <Image
+                source={TAB_IMAGES[imageKey]}
+                style={[
+                  { width: iconSize, height: iconSize, borderRadius: iconSize / 2 },
+                ]}
+                contentFit="cover"
+                transition={200}
+              />
+            </Animated.View>
           </Animated.View>
         </View>
       );
@@ -55,26 +60,33 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={{
+      screenOptions={() => ({
         tabBarActiveTintColor: palette.accent,
         tabBarInactiveTintColor: palette.icon,
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarShowLabel: false,
-       
-       tabBarStyle: {
-        position: 'absolute',
-        left: 16,
-        right: 16,
-        height: 100,
-        paddingTop: 24,
-        paddingBottom: 10,
-        borderTopLeftRadius: 46,
-        borderTopRightRadius: 46,
-        paddingHorizontal: 8,
-        backgroundColor: 'black',
-      }
-      }}>
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 9,
+          fontWeight: '500',
+          marginTop: 10,
+          marginBottom: 0,
+        },
+        tabBarStyle: {
+          position: 'absolute',
+          left: 16,
+          right: 16,
+          height: 100,
+          paddingTop: 20,
+          paddingBottom: 8,
+          borderTopLeftRadius: 46,
+          borderTopRightRadius: 46,
+          paddingHorizontal: 8,
+          backgroundColor: 'black',
+          borderTopWidth: 0,
+          elevation: 0,
+        },
+      })}>
       <Tabs.Screen
         name="savings"
         options={{
@@ -85,7 +97,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="work-tracker"
         options={{
-          title: 'Work Tracker',
+          title: 'Work',
           tabBarIcon: renderTabIcon('work', 'briefcase.fill', 'Work', false),
         }}
       />

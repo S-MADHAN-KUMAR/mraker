@@ -1,25 +1,22 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, View } from 'react-native';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, View, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-
-import ParallaxScrollView from '@/components/parallax-scroll-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { supabase } from '@/lib/supabase';
-import { Colors, Gradients, type ThemeColorSet } from '@/constants/theme';
+import { Colors, FontFamily, type ThemeColorSet } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useModal } from '@/components/ui/modal';
 
 interface WorkEntry {
   id: string;
   project_name: string;
   task: string;
   screenshots: string[];
-  audio_transcription: string | null;
-  audio_uri: string | null;
   date: string;
   month: number;
   year: number;
@@ -40,26 +37,31 @@ export default function WorkTrackerScreen() {
   const [projectName, setProjectName] = useState('');
   const [task, setTask] = useState('');
   const [screenshots, setScreenshots] = useState<string[]>([]);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [audioUri, setAudioUri] = useState<string | null>(null);
-  const [transcription, setTranscription] = useState('');
-  const [recordingTime, setRecordingTime] = useState(0);
-  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const { showModal } = useModal();
+  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const palette = Colors[colorScheme ?? 'dark'];
-  const styles = useMemo(() => createStyles(palette), [palette]);
+  const styles = useMemo(() => createStyles(palette, insets.top, insets.bottom), [palette, insets.top, insets.bottom]);
+
+  useEffect(() => {
+    requestPermissions();
+    fetchWorkEntries();
+  }, []);
 
   const requestPermissions = async () => {
-    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-    const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    const { status: audioStatus } = await Audio.requestPermissionsAsync();
+    try {
+      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+      const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (cameraStatus !== 'granted' || mediaStatus !== 'granted') {
-      Alert.alert('Permission Required', 'Please grant camera and media library permissions');
-    }
-    if (audioStatus !== 'granted') {
-      Alert.alert('Permission Required', 'Please grant audio recording permissions');
+      if (cameraStatus !== 'granted' || mediaStatus !== 'granted') {
+        showModal({
+          title: 'Permission Required',
+          message: 'Please grant camera and media library permissions',
+          type: 'warning',
+        });
+      }
+    } catch (error) {
+      console.error('Permission request error:', error);
     }
   };
 
@@ -78,14 +80,17 @@ export default function WorkTrackerScreen() {
 
       setWorkEntries(data || []);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to fetch work entries');
+      showModal({
+        title: 'Error',
+        message: error.message || 'Failed to fetch work entries',
+        type: 'error',
+      });
     } finally {
       setLoading(false);
     }
   }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
-    requestPermissions();
     fetchWorkEntries();
   }, [fetchWorkEntries]);
 
@@ -102,7 +107,11 @@ export default function WorkTrackerScreen() {
         setScreenshots([...screenshots, ...newScreenshots]);
       }
     } catch {
-      Alert.alert('Error', 'Failed to pick image');
+      showModal({
+        title: 'Error',
+        message: 'Failed to pick image',
+        type: 'error',
+      });
     }
   };
 
@@ -116,70 +125,21 @@ export default function WorkTrackerScreen() {
         setScreenshots([...screenshots, result.assets[0].uri]);
       }
     } catch {
-      Alert.alert('Error', 'Failed to take photo');
-    }
-  };
-
-  const startRecording = async () => {
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      showModal({
+        title: 'Error',
+        message: 'Failed to take photo',
+        type: 'error',
       });
-
-      const { recording: newRecording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      setRecording(newRecording);
-      setIsRecording(true);
-      setRecordingTime(0);
-
-      // Start timer
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-    } catch {
-      Alert.alert('Error', 'Failed to start recording');
-    }
-  };
-
-  const stopRecording = async () => {
-    if (!recording) return;
-
-    try {
-      setIsRecording(false);
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setAudioUri(uri || null);
-      setRecording(null);
-      setRecordingTime(0);
-
-      // For now, we'll store the audio URI
-      // In production, you'd upload this to Supabase Storage and get the URL
-      // For transcription, you'd integrate with a service like Google Cloud Speech-to-Text
-      Alert.alert('Recording Complete', 'Audio recorded. You can add transcription manually or it will be processed.');
-    } catch {
-      Alert.alert('Error', 'Failed to stop recording');
-    }
-  };
-
-  const uploadAudioToSupabase = async (localUri: string): Promise<string | null> => {
-    try {
-      return localUri;
-    } catch (err) {
-      console.error('Error uploading audio:', err);
-      return null;
     }
   };
 
   const handleAddWork = async () => {
     if (!projectName || !task) {
-      Alert.alert('Error', 'Please fill in project name and task');
+      showModal({
+        title: 'Error',
+        message: 'Please fill in project name and task',
+        type: 'error',
+      });
       return;
     }
 
@@ -190,24 +150,12 @@ export default function WorkTrackerScreen() {
         ? today.toISOString().split('T')[0]
         : new Date(selectedYear, selectedMonth, 1).toISOString().split('T')[0];
 
-      // Upload screenshots to Supabase Storage if needed
-      // For now, we'll store the local URIs
-      const screenshotUris = screenshots;
-
-      // Upload audio if exists
-      let finalAudioUri = audioUri;
-      if (audioUri) {
-        finalAudioUri = await uploadAudioToSupabase(audioUri);
-      }
-
       const { error } = await supabase
         .from('work_tracker')
         .insert({
           project_name: projectName,
-          task: task + (transcription ? `\n\n[Audio Transcription]: ${transcription}` : ''),
-          screenshots: screenshotUris,
-          audio_uri: finalAudioUri,
-          audio_transcription: transcription || null,
+          task: task,
+          screenshots: screenshots,
           date,
           month: selectedMonth + 1,
           year: selectedYear,
@@ -215,51 +163,51 @@ export default function WorkTrackerScreen() {
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Work entry added successfully!');
+      showModal({
+        title: 'Success',
+        message: 'Work entry added successfully!',
+        type: 'success',
+      });
       setProjectName('');
       setTask('');
       setScreenshots([]);
-      setAudioUri(null);
-      setTranscription('');
       fetchWorkEntries();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to add work entry');
+      showModal({
+        title: 'Error',
+        message: error.message || 'Failed to add work entry',
+        type: 'error',
+      });
     } finally {
       setAdding(false);
     }
   };
 
   const handleDeleteWork = async (id: string) => {
-    Alert.alert(
-      'Delete Work Entry',
-      'Are you sure you want to delete this entry?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase
-                .from('work_tracker')
-                .delete()
-                .eq('id', id);
+    showModal({
+      title: 'Delete Work Entry',
+      message: 'Are you sure you want to delete this entry?',
+      type: 'confirm',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('work_tracker')
+            .delete()
+            .eq('id', id);
 
-              if (error) throw error;
-              fetchWorkEntries();
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to delete work entry');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+          if (error) throw error;
+          fetchWorkEntries();
+        } catch (error: any) {
+          showModal({
+            title: 'Error',
+            message: error.message || 'Failed to delete work entry',
+            type: 'error',
+          });
+        }
+      },
+    });
   };
 
   const filteredEntries = workEntries.filter(entry => {
@@ -268,368 +216,311 @@ export default function WorkTrackerScreen() {
   });
 
   const screenshotCount = workEntries.reduce((sum, entry) => sum + (entry.screenshots?.length ?? 0), 0);
-  const audioCount = workEntries.filter((entry) => entry.audio_uri).length;
+
+  // Check if there's already an entry for the current month and year
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const hasCurrentMonthEntry = workEntries.some(entry => {
+    const entryDate = new Date(entry.date);
+    return entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear;
+  });
 
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: Colors.light.background, dark: Colors.dark.background }}
-      headerImage={
-        <LinearGradient colors={Gradients.oceanic} style={styles.headerGradient}>
-          <IconSymbol size={180} color="rgba(255,255,255,0.08)" name="briefcase.fill" />
-          <View style={styles.headerCopy}>
-            <ThemedText style={styles.headerEyebrow}>Productivity vault</ThemedText>
-            <ThemedText type="title" style={styles.headerTitle}>
-              Capture, reflect, improve
-            </ThemedText>
-            <ThemedText style={styles.headerSubtitle}>
-              Logs, audio, and visual proof from every shift in one calm layout.
-            </ThemedText>
-          </View>
-        </LinearGradient>
-      }>
-      <Animated.View entering={FadeInDown.duration(600)} style={{ marginBottom: 4 }}>
-        <LinearGradient colors={[palette.card, palette.cardElevated]} style={styles.titleContainer}>
-          <View>
-            <ThemedText style={styles.heroEyebrow}>This month</ThemedText>
-            <ThemedText type="title" style={styles.heroTitle}>
-              {MONTHS[selectedMonth]} {selectedYear}
-            </ThemedText>
-          </View>
-          <View style={styles.heroStatsRow}>
-            <View style={styles.heroStat}>
-              <ThemedText style={styles.heroStatLabel}>Entries</ThemedText>
-              <ThemedText style={styles.heroStatValue}>{filteredEntries.length}</ThemedText>
+    <ScrollView
+      style={[styles.scrollView, { backgroundColor: palette.background }]}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}>
+      
+      {/* Stats Card */}
+      <Animated.View entering={FadeInDown.duration(500)} style={styles.cardContainer}>
+        <ThemedView style={styles.statsCard}>
+          <View style={styles.statsHeader}>
+            <View style={[styles.iconContainer, { backgroundColor: '#1e40af15' }]}>
+              <IconSymbol size={20} name="briefcase.fill" color="#1e40af" />
             </View>
-            <View style={styles.heroStat}>
-              <ThemedText style={styles.heroStatLabel}>Shots</ThemedText>
-              <ThemedText style={styles.heroStatValue}>{screenshotCount}</ThemedText>
-            </View>
-            <View style={styles.heroStat}>
-              <ThemedText style={styles.heroStatLabel}>Voice</ThemedText>
-              <ThemedText style={styles.heroStatValue}>{audioCount}</ThemedText>
+            <View>
+              <ThemedText style={styles.statsLabel}>This Month</ThemedText>
+              <ThemedText style={styles.statsTitle}>
+                {MONTHS[selectedMonth]} {selectedYear}
+              </ThemedText>
             </View>
           </View>
-        </LinearGradient>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <ThemedText style={styles.statValue}>{filteredEntries.length}</ThemedText>
+              <ThemedText style={styles.statLabel}>Entries</ThemedText>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <ThemedText style={styles.statValue}>{screenshotCount}</ThemedText>
+              <ThemedText style={styles.statLabel}>Screenshots</ThemedText>
+            </View>
+          </View>
+        </ThemedView>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(60).duration(600)} style={{ marginBottom: 4 }}>
-        <ThemedView style={styles.selectorContainer}>
-          <ThemedView style={styles.selectorRow}>
-            <ThemedText style={styles.selectorLabel}>Month</ThemedText>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthScroll}>
-              {MONTHS.map((month, index) => (
-                <TouchableOpacity
-                  key={month}
-                  style={[styles.monthButton, selectedMonth === index && styles.monthButtonSelected]}
-                  onPress={() => setSelectedMonth(index)}>
-                  <ThemedText
-                    style={[
-                      styles.monthButtonText,
-                      selectedMonth === index && styles.monthButtonTextSelected,
-                    ]}>
-                    {month.substring(0, 3)}
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </ThemedView>
-          <ThemedView style={styles.selectorRow}>
-            <ThemedText style={styles.selectorLabel}>Year</ThemedText>
+      {/* Add Work Form - Only show if no entry exists for current month */}
+      {!hasCurrentMonthEntry && (
+        <Animated.View entering={FadeInDown.delay(120).duration(500)} style={styles.cardContainer}>
+          <ThemedView style={styles.formCard}>
+          <View style={styles.formHeader}>
+            <View style={styles.formHeaderLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: '#05966915' }]}>
+                <IconSymbol size={20} name="plus.circle.fill" color="#059669" />
+              </View>
+              <View>
+                <ThemedText style={styles.formTitle}>Add Work Entry</ThemedText>
+                <ThemedText style={styles.formSubtitle}>Record your daily work progress</ThemedText>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <ThemedText style={styles.inputLabel}>Project Name *</ThemedText>
             <TextInput
-              style={styles.yearInput}
-              value={selectedYear.toString()}
-              onChangeText={(text) => setSelectedYear(parseInt(text) || new Date().getFullYear())}
-              keyboardType="numeric"
-              placeholder="2024"
+              style={styles.input}
+              value={projectName}
+              onChangeText={setProjectName}
+              placeholder="Enter project name"
               placeholderTextColor={palette.muted}
             />
-          </ThemedView>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <ThemedText style={styles.inputLabel}>Task Description *</ThemedText>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={task}
+              onChangeText={setTask}
+              placeholder="Describe the task you worked on..."
+              placeholderTextColor={palette.muted}
+              multiline
+              numberOfLines={4}
+            />
+          </View>
+
+          {/* Screenshots */}
+          <View style={styles.inputGroup}>
+            <ThemedText style={styles.inputLabel}>Screenshots</ThemedText>
+            <View style={styles.screenshotButtons}>
+              <TouchableOpacity
+                style={styles.screenshotButton}
+                onPress={handleTakePhoto}>
+                <IconSymbol size={18} name="camera.fill" color="#1e40af" />
+                <ThemedText style={styles.screenshotButtonText}>Take Photo</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.screenshotButton}
+                onPress={handlePickImage}>
+                <IconSymbol size={18} name="photo.fill" color="#1e40af" />
+                <ThemedText style={styles.screenshotButtonText}>Pick Image</ThemedText>
+              </TouchableOpacity>
+            </View>
+            {screenshots.length > 0 && (
+              <ScrollView horizontal style={styles.screenshotsList} showsHorizontalScrollIndicator={false}>
+                {screenshots.map((uri, index) => (
+                  <View key={index} style={styles.screenshotItem}>
+                    <Image source={{ uri }} style={styles.screenshot} />
+                    <TouchableOpacity
+                      style={styles.removeScreenshot}
+                      onPress={() => setScreenshots(screenshots.filter((_, i) => i !== index))}>
+                      <IconSymbol size={16} name="xmark.circle.fill" color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.submitButton, adding && styles.submitButtonDisabled]}
+            onPress={handleAddWork}
+            disabled={adding}>
+            <LinearGradient
+              colors={['#1e40af', '#059669']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.submitButtonGradient}>
+              {adding ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <IconSymbol size={18} name="checkmark.circle.fill" color="#fff" />
+                  <ThemedText style={styles.submitButtonText}>Add Work Entry</ThemedText>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
         </ThemedView>
       </Animated.View>
+      )}
 
-      {/* Add Work Form */}
-      <Animated.View entering={FadeInDown.delay(120).duration(600)} style={{ marginBottom: 4 }}>
-        <ThemedView style={styles.formContainer}>
-        <ThemedView style={styles.formTitle}>
-          <IconSymbol size={20} name="plus.circle.fill" color="#0a7ea4" />
-          <ThemedText type="subtitle">Add Daily Work</ThemedText>
-        </ThemedView>
+      {/* Work Entries List */}
+      <Animated.View entering={FadeInUp.delay(160).duration(500)} style={styles.cardContainer}>
+        <ThemedView style={styles.listCard}>
+          <View style={styles.listHeader}>
+            <View style={styles.listHeaderLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: '#1e40af15' }]}>
+                <IconSymbol size={20} name="list.bullet" color="#1e40af" />
+              </View>
+              <View>
+                <ThemedText style={styles.listTitle}>
+                  {MONTHS[selectedMonth]} {selectedYear}
+                </ThemedText>
+                <ThemedText style={styles.listSubtitle}>
+                  {filteredEntries.length} {filteredEntries.length === 1 ? 'entry' : 'entries'}
+                </ThemedText>
+              </View>
+            </View>
+          </View>
 
-        <ThemedView style={styles.inputGroup}>
-          <ThemedText style={styles.label}>Project Name *</ThemedText>
-          <TextInput
-            style={styles.input}
-            value={projectName}
-            onChangeText={setProjectName}
-            placeholder="Enter project name"
-            placeholderTextColor="#999"
-          />
-        </ThemedView>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={palette.accent} />
+              <ThemedText style={styles.loadingText}>Loading entries...</ThemedText>
+            </View>
+          ) : filteredEntries.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <IconSymbol size={48} name="tray" color={palette.muted} />
+              <ThemedText style={styles.emptyText}>No entries yet</ThemedText>
+              <ThemedText style={styles.emptySubtext}>Add your first work entry above</ThemedText>
+            </View>
+          ) : (
+            <ScrollView style={styles.entriesList} showsVerticalScrollIndicator={false}>
+              {filteredEntries.map((entry) => (
+                <View key={entry.id} style={styles.entryCard}>
+                  <View style={styles.entryHeader}>
+                    <View style={styles.entryHeaderLeft}>
+                      <View style={[styles.entryIconContainer, { backgroundColor: '#1e40af15' }]}>
+                        <IconSymbol size={18} name="folder.fill" color="#1e40af" />
+                      </View>
+                      <View style={styles.entryInfo}>
+                        <ThemedText style={styles.entryProjectName}>{entry.project_name}</ThemedText>
+                        <ThemedText style={styles.entryDate}>
+                          {new Date(entry.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </ThemedText>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteWork(entry.id)}
+                      style={styles.deleteButton}>
+                      <IconSymbol size={18} name="trash.fill" color={palette.danger} />
+                    </TouchableOpacity>
+                  </View>
 
-        <ThemedView style={styles.inputGroup}>
-          <ThemedText style={styles.label}>Task *</ThemedText>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={task}
-            onChangeText={setTask}
-            placeholder="Describe the task..."
-            placeholderTextColor="#999"
-            multiline
-            numberOfLines={4}
-          />
-        </ThemedView>
+                  <View style={styles.entryTaskContainer}>
+                    <ThemedText style={styles.entryTaskText}>{entry.task}</ThemedText>
+                  </View>
 
-        {/* Audio Recording */}
-        <ThemedView style={styles.inputGroup}>
-          <ThemedView style={styles.audioHeader}>
-            <ThemedText style={styles.label}>Audio Recording</ThemedText>
-            {isRecording && (
-              <ThemedText style={styles.recordingTime}>{formatTime(recordingTime)}</ThemedText>
-            )}
-          </ThemedView>
-          <ThemedView style={styles.audioButtons}>
-            {!isRecording ? (
-              <TouchableOpacity
-                style={styles.recordButton}
-                onPress={startRecording}
-              >
-                <IconSymbol size={20} name="mic.fill" color="#fff" />
-                <ThemedText style={styles.recordButtonText}>Start Recording</ThemedText>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.stopButton}
-                onPress={stopRecording}
-              >
-                <IconSymbol size={20} name="stop.fill" color="#fff" />
-                <ThemedText style={styles.recordButtonText}>Stop Recording</ThemedText>
-              </TouchableOpacity>
-            )}
-            {audioUri && !isRecording && (
-              <TouchableOpacity
-                style={styles.playButton}
-                onPress={async () => {
-                  try {
-                    const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
-                    await sound.playAsync();
-                  } catch {
-                    Alert.alert('Error', 'Could not play audio');
-                  }
-                }}
-              >
-                <IconSymbol size={18} name="play.fill" color="#4CAF50" />
-              </TouchableOpacity>
-            )}
-          </ThemedView>
-          {audioUri && (
-            <ThemedView style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Transcription (Optional)</ThemedText>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={transcription}
-                onChangeText={setTranscription}
-                placeholder="Add transcription or notes from recording..."
-                placeholderTextColor="#999"
-                multiline
-                numberOfLines={3}
-              />
-            </ThemedView>
-          )}
-        </ThemedView>
-
-        {/* Screenshots */}
-        <ThemedView style={styles.inputGroup}>
-          <ThemedText style={styles.label}>Screenshots</ThemedText>
-          <ThemedView style={styles.screenshotButtons}>
-            <TouchableOpacity
-              style={styles.screenshotButton}
-              onPress={handleTakePhoto}
-            >
-              <IconSymbol size={20} name="camera.fill" color="#0a7ea4" />
-              <ThemedText style={styles.screenshotButtonText}>Take Photo</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.screenshotButton}
-              onPress={handlePickImage}
-            >
-              <IconSymbol size={20} name="photo.fill" color="#0a7ea4" />
-              <ThemedText style={styles.screenshotButtonText}>Pick Image</ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-          {screenshots.length > 0 && (
-            <ScrollView horizontal style={styles.screenshotsList}>
-              {screenshots.map((uri, index) => (
-                <View key={index} style={styles.screenshotContainer}>
-                  <Image source={{ uri }} style={styles.screenshot} />
-                  <TouchableOpacity
-                    style={styles.removeScreenshot}
-                    onPress={() => setScreenshots(screenshots.filter((_, i) => i !== index))}
-                  >
-                    <IconSymbol size={16} name="xmark.circle.fill" color="#ff4444" />
-                  </TouchableOpacity>
+                  {entry.screenshots && entry.screenshots.length > 0 && (
+                    <ScrollView horizontal style={styles.entryScreenshots} showsHorizontalScrollIndicator={false}>
+                      {entry.screenshots.map((uri, index) => (
+                        <Image key={index} source={{ uri }} style={styles.entryScreenshot} />
+                      ))}
+                    </ScrollView>
+                  )}
                 </View>
               ))}
             </ScrollView>
           )}
         </ThemedView>
-
-          <TouchableOpacity
-            style={[styles.addButton, adding && styles.addButtonDisabled]}
-            onPress={handleAddWork}
-            disabled={adding}>
-            {adding ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <IconSymbol size={20} name="checkmark.circle.fill" color="#fff" />
-                <ThemedText style={styles.addButtonText}>Add Work Entry</ThemedText>
-              </>
-            )}
-          </TouchableOpacity>
-        </ThemedView>
       </Animated.View>
-
-      {/* Work Entries List */}
-      <Animated.View entering={FadeInUp.delay(160).duration(600)} style={{ marginBottom: 4 }}>
-        <ThemedView style={styles.listContainer}>
-        <ThemedView style={styles.listTitle}>
-          <IconSymbol size={20} name="list.bullet" color="#0a7ea4" />
-          <ThemedText type="subtitle">
-            {MONTHS[selectedMonth]} {selectedYear} ({filteredEntries.length} entries)
-          </ThemedText>
-        </ThemedView>
-
-        {loading ? (
-          <ThemedView style={styles.loadingContainer}>
-            <ActivityIndicator size="large" />
-            <ThemedText style={styles.loadingText}>Loading work entries...</ThemedText>
-          </ThemedView>
-        ) : filteredEntries.length === 0 ? (
-          <ThemedView style={styles.emptyContainer}>
-            <IconSymbol size={48} name="tray" color="#999" />
-            <ThemedText style={styles.emptyText}>No work entries for this month</ThemedText>
-            <ThemedText style={styles.emptySubtext}>Add your first work entry above</ThemedText>
-          </ThemedView>
-        ) : (
-          <ScrollView style={styles.entriesList}>
-            {filteredEntries.map((entry) => (
-              <ThemedView key={entry.id} style={styles.entryCard}>
-                <ThemedView style={styles.entryHeader}>
-                  <ThemedView style={styles.entryHeaderLeft}>
-                    <IconSymbol size={24} name="folder.fill" color="#2196F3" />
-                    <ThemedView>
-                      <ThemedText type="defaultSemiBold" style={styles.projectName}>
-                        {entry.project_name}
-                      </ThemedText>
-                      <ThemedText style={styles.entryDate}>
-                        {new Date(entry.date).toLocaleDateString()}
-                      </ThemedText>
-                    </ThemedView>
-                  </ThemedView>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteWork(entry.id)}
-                    style={styles.deleteButton}
-                  >
-                    <IconSymbol size={20} name="trash.fill" color="#ff4444" />
-                  </TouchableOpacity>
-                </ThemedView>
-
-                <ThemedView style={styles.taskContainer}>
-                  <ThemedText style={styles.taskText}>{entry.task}</ThemedText>
-                </ThemedView>
-
-                {entry.screenshots && entry.screenshots.length > 0 && (
-                  <ScrollView horizontal style={styles.entryScreenshots}>
-                    {entry.screenshots.map((uri, index) => (
-                      <Image key={index} source={{ uri }} style={styles.entryScreenshot} />
-                    ))}
-                  </ScrollView>
-                )}
-
-                {entry.audio_uri && (
-                  <ThemedView style={styles.audioIndicator}>
-                    <IconSymbol size={16} name="waveform" color="#4CAF50" />
-                    <ThemedText style={styles.audioIndicatorText}>Audio recording available</ThemedText>
-                  </ThemedView>
-                )}
-              </ThemedView>
-            ))}
-          </ScrollView>
-        )}
-        </ThemedView>
-      </Animated.View>
-    </ParallaxScrollView>
+    </ScrollView>
   );
 }
 
-const createStyles = (palette: ThemeColorSet) =>
+const createStyles = (palette: ThemeColorSet, topInset: number, bottomInset: number) =>
   StyleSheet.create({
-    headerGradient: {
+    scrollView: {
       flex: 1,
-      padding: 32,
-      justifyContent: 'flex-end',
+      backgroundColor: palette.background,
     },
-    headerCopy: {
-      gap: 8,
-      maxWidth: 280,
-    },
-    headerEyebrow: {
-      fontSize: 12,
-      letterSpacing: 2,
-      color: palette.muted,
-      textTransform: 'uppercase',
-    },
-    headerTitle: {
-      fontSize: 32,
-    },
-    headerSubtitle: {
-      color: palette.muted,
-      lineHeight: 20,
-    },
-    titleContainer: {
-      borderRadius: 28,
-      padding: 20,
-      borderWidth: 1,
-      borderColor: palette.border,
-      marginBottom: 20,
-      backgroundColor: palette.card,
-    },
-    heroEyebrow: {
-      fontSize: 12,
-      letterSpacing: 2,
-      color: palette.muted,
-      textTransform: 'uppercase',
-    },
-    heroTitle: {
-      fontSize: 28,
-      marginTop: 6,
-    },
-    heroStatsRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginTop: 16,
-    },
-    heroStat: {
-      flex: 1,
-      gap: 4,
-    },
-    heroStatLabel: {
-      color: palette.muted,
-      fontSize: 12,
-      textTransform: 'uppercase',
-    },
-    heroStatValue: {
-      fontSize: 20,
-      fontWeight: '700',
-    },
-    selectorContainer: {
-      marginBottom: 24,
+    scrollContent: {
       padding: 16,
+      paddingTop: Math.max(topInset + 20, 20),
+      paddingBottom: Math.max(bottomInset + 120, 120), // Extra padding for bottom navigation bar
+    },
+    cardContainer: {
+      marginBottom: 16,
+    },
+    statsCard: {
       borderRadius: 20,
       borderWidth: 1,
       borderColor: palette.border,
       backgroundColor: palette.card,
+      padding: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    statsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
       gap: 12,
+      marginBottom: 20,
+    },
+    iconContainer: {
+      width: 40,
+      height: 40,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    statsLabel: {
+      fontSize: 12,
+      color: palette.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 2,
+      fontFamily: FontFamily.semiBold,
+    },
+    statsTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.text,
+      fontFamily: FontFamily.semiBold,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-around',
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: palette.border,
+    },
+    statItem: {
+      alignItems: 'center',
+      gap: 4,
+    },
+    statValue: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: palette.text,
+      fontFamily: FontFamily.bold,
+    },
+    statLabel: {
+      fontSize: 12,
+      color: palette.muted,
+      fontFamily: FontFamily.medium,
+    },
+    statDivider: {
+      width: 1,
+      height: 40,
+      backgroundColor: palette.border,
+    },
+    selectorCard: {
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.card,
+      padding: 20,
+      gap: 16,
     },
     selectorRow: {
       flexDirection: 'row',
@@ -637,124 +528,107 @@ const createStyles = (palette: ThemeColorSet) =>
       gap: 12,
     },
     selectorLabel: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '600',
       color: palette.muted,
-      minWidth: 60,
+      minWidth: 50,
+      fontFamily: FontFamily.semiBold,
     },
     monthScroll: {
       flex: 1,
     },
-    monthButton: {
-      paddingHorizontal: 14,
+    monthChip: {
+      paddingHorizontal: 16,
       paddingVertical: 8,
-      borderRadius: 16,
+      borderRadius: 12,
       backgroundColor: palette.surface,
       marginRight: 8,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: palette.border,
     },
-    monthButtonSelected: {
-      backgroundColor: palette.accent,
-      borderColor: palette.accent,
+    monthChipActive: {
+      backgroundColor: '#1e40af',
+      borderColor: '#1e40af',
     },
-    monthButtonText: {
-      fontSize: 14,
-      color: palette.text,
-    },
-    monthButtonTextSelected: {
-      color: '#fff',
+    monthChipText: {
+      fontSize: 13,
       fontWeight: '600',
+      color: palette.text,
+      fontFamily: FontFamily.semiBold,
+    },
+    monthChipTextActive: {
+      color: '#fff',
+      fontFamily: FontFamily.semiBold,
     },
     yearInput: {
       flex: 1,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: palette.border,
-      borderRadius: 16,
+      borderRadius: 12,
       padding: 12,
-      fontSize: 16,
+      fontSize: 15,
       backgroundColor: palette.surface,
       color: palette.text,
+      fontFamily: FontFamily.medium,
     },
-    formContainer: {
-      marginBottom: 24,
-      padding: 16,
-      borderRadius: 24,
+    formCard: {
+      borderRadius: 20,
       borderWidth: 1,
       borderColor: palette.border,
       backgroundColor: palette.card,
+      padding: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
     },
-    formTitle: {
+    formHeader: {
+      marginBottom: 20,
+    },
+    formHeaderLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      marginBottom: 16,
+      gap: 12,
+    },
+    formTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.text,
+      marginBottom: 2,
+      fontFamily: FontFamily.semiBold,
+    },
+    formSubtitle: {
+      fontSize: 13,
+      color: palette.muted,
+      fontFamily: FontFamily.regular,
     },
     inputGroup: {
-      marginBottom: 16,
+      marginBottom: 20,
     },
-    label: {
-      marginBottom: 8,
-      fontSize: 14,
+    inputLabel: {
+      fontSize: 12,
       fontWeight: '600',
       color: palette.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 8,
+      fontFamily: FontFamily.semiBold,
     },
     input: {
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: palette.border,
-      borderRadius: 18,
-      padding: 12,
-      fontSize: 16,
+      borderRadius: 12,
+      padding: 14,
+      fontSize: 15,
       backgroundColor: palette.surface,
       color: palette.text,
+      fontFamily: FontFamily.regular,
     },
     textArea: {
       minHeight: 100,
       textAlignVertical: 'top',
-    },
-    audioHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    recordingTime: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: palette.danger,
-    },
-    audioButtons: {
-      flexDirection: 'row',
-      gap: 12,
-      alignItems: 'center',
-    },
-    recordButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      backgroundColor: palette.success,
-      padding: 12,
-      borderRadius: 16,
-    },
-    stopButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      backgroundColor: palette.danger,
-      padding: 12,
-      borderRadius: 16,
-    },
-    recordButtonText: {
-      color: '#fff',
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    playButton: {
-      padding: 12,
-      borderRadius: 16,
-      backgroundColor: palette.surface,
-      borderWidth: 1,
-      borderColor: palette.success,
+      fontFamily: FontFamily.regular,
     },
     screenshotButtons: {
       flexDirection: 'row',
@@ -767,21 +641,22 @@ const createStyles = (palette: ThemeColorSet) =>
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
-      padding: 12,
-      borderRadius: 16,
+      padding: 14,
+      borderRadius: 12,
       backgroundColor: palette.surface,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: palette.border,
     },
     screenshotButtonText: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '600',
       color: palette.text,
+      fontFamily: FontFamily.semiBold,
     },
     screenshotsList: {
       marginTop: 8,
     },
-    screenshotContainer: {
+    screenshotItem: {
       marginRight: 12,
       position: 'relative',
     },
@@ -789,47 +664,65 @@ const createStyles = (palette: ThemeColorSet) =>
       width: 100,
       height: 100,
       borderRadius: 12,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: palette.border,
     },
     removeScreenshot: {
       position: 'absolute',
-      top: -8,
-      right: -8,
-      backgroundColor: palette.card,
-      borderRadius: 12,
+      top: -6,
+      right: -6,
+      backgroundColor: palette.danger,
+      borderRadius: 10,
+      padding: 2,
     },
-    addButton: {
+    submitButton: {
+      borderRadius: 12,
+      overflow: 'hidden',
+      marginTop: 8,
+    },
+    submitButtonDisabled: {
+      opacity: 0.6,
+    },
+    submitButtonGradient: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: palette.accent,
-      padding: 16,
-      borderRadius: 16,
-      gap: 8,
-      marginTop: 8,
+      paddingVertical: 16,
+      gap: 10,
     },
-    addButtonDisabled: {
-      opacity: 0.6,
-    },
-    addButtonText: {
+    submitButtonText: {
       color: '#fff',
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '600',
+      letterSpacing: 0.3,
+      fontFamily: FontFamily.semiBold,
     },
-    listContainer: {
-      marginBottom: 24,
-      borderRadius: 28,
+    listCard: {
+      borderRadius: 20,
       borderWidth: 1,
       borderColor: palette.border,
-      padding: 20,
       backgroundColor: palette.card,
+      padding: 20,
     },
-    listTitle: {
+    listHeader: {
+      marginBottom: 16,
+    },
+    listHeaderLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      marginBottom: 16,
+      gap: 12,
+    },
+    listTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.text,
+      marginBottom: 2,
+      fontFamily: FontFamily.semiBold,
+    },
+    listSubtitle: {
+      fontSize: 13,
+      color: palette.muted,
+      fontFamily: FontFamily.regular,
     },
     loadingContainer: {
       alignItems: 'center',
@@ -838,6 +731,7 @@ const createStyles = (palette: ThemeColorSet) =>
     },
     loadingText: {
       color: palette.muted,
+      fontFamily: FontFamily.regular,
     },
     emptyContainer: {
       alignItems: 'center',
@@ -845,22 +739,25 @@ const createStyles = (palette: ThemeColorSet) =>
       gap: 12,
     },
     emptyText: {
-      fontSize: 18,
+      fontSize: 16,
       fontWeight: '600',
       color: palette.muted,
+      fontFamily: FontFamily.semiBold,
     },
     emptySubtext: {
-      fontSize: 14,
+      fontSize: 13,
       color: palette.muted,
+      fontFamily: FontFamily.regular,
     },
     entriesList: {
       maxHeight: 500,
+      marginBottom: 8,
     },
     entryCard: {
       backgroundColor: palette.surface,
-      borderRadius: 18,
+      borderRadius: 16,
       padding: 16,
-      marginBottom: 16,
+      marginBottom: 12,
       borderWidth: 1,
       borderColor: palette.border,
     },
@@ -876,49 +773,49 @@ const createStyles = (palette: ThemeColorSet) =>
       gap: 12,
       flex: 1,
     },
-    projectName: {
-      fontSize: 18,
-      color: palette.info,
+    entryIconContainer: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    entryInfo: {
+      flex: 1,
+    },
+    entryProjectName: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: palette.text,
+      marginBottom: 2,
+      fontFamily: FontFamily.semiBold,
     },
     entryDate: {
       fontSize: 12,
       color: palette.muted,
-      marginTop: 4,
+      fontFamily: FontFamily.regular,
     },
     deleteButton: {
-      padding: 4,
+      padding: 8,
     },
-    taskContainer: {
+    entryTaskContainer: {
       marginBottom: 12,
     },
-    taskText: {
+    entryTaskText: {
       fontSize: 14,
       lineHeight: 20,
       color: palette.text,
+      fontFamily: FontFamily.regular,
     },
     entryScreenshots: {
       marginTop: 12,
     },
     entryScreenshot: {
-      width: 120,
-      height: 120,
+      width: 100,
+      height: 100,
       borderRadius: 8,
       marginRight: 12,
       borderWidth: 1,
       borderColor: palette.border,
     },
-    audioIndicator: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginTop: 12,
-      padding: 8,
-      backgroundColor: palette.surface,
-      borderRadius: 6,
-    },
-    audioIndicatorText: {
-      fontSize: 12,
-      color: palette.success,
-    },
   });
-

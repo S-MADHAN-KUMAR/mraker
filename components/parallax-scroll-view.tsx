@@ -29,8 +29,8 @@ export default function ParallaxScrollView({
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollOffset(scrollRef);
   
-  // Tab bar height (80px) + bottom margin (16px) + safe area bottom + extra padding (16px)
-  const bottomPadding = 80 + 16 + insets.bottom + 16;
+  // Tab bar height (100px) + bottom margin (16px) + safe area bottom + extra padding (20px)
+  const bottomPadding = 100 + 16 + insets.bottom + 20;
   
   const headerAnimatedStyle = useAnimatedStyle(() => {
     return {
