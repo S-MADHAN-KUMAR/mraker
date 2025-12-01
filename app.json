@@ -1,7 +1,46 @@
 {
-  "extra": {
-    "eas": {
-      "projectId": "210c6f3f-2b6c-421e-97ad-bb4263c94437"
+  "expo": {
+    "name": "mraker",
+    "slug": "mraker",
+    "version": "1.0.0",
+    "scheme": "mraker",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+
+    "assetBundlePatterns": ["**/*"],
+
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.madhan.mraker"
+    },
+
+    "android": {
+      "package": "com.madhan.mraker",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+
+    "extra": {
+      "eas": {
+        "projectId": "210c6f3f-2b6c-421e-97ad-bb4263c94437"
+      }
     }
   }
 }
