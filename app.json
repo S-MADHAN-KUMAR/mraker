@@ -1,66 +1,7 @@
 {
-  "expo": {
-    "name": "Mraker",
-    "slug": "mraker",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "mraker",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#030711",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.mraker.app",
-      "permissions": [
-        "RECORD_AUDIO",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ]
-    },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.mraker.app",
-      "infoPlist": {
-        "NSMicrophoneUsageDescription": "This app needs access to your microphone to record voice notes.",
-        "NSCameraUsageDescription": "This app needs access to your camera to take photos.",
-        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to select images."
-      }
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/logo.jpeg",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#030711",
-          "dark": {
-            "backgroundColor": "#030711"
-          }
-        }
-      ]
-    ],
-    "experiments": {
-      "typedRoutes": true
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "210c6f3f-2b6c-421e-97ad-bb4263c94437"
-      }
+  "extra": {
+    "eas": {
+      "projectId": "210c6f3f-2b6c-421e-97ad-bb4263c94437"
     }
   }
 }
