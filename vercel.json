@@ -1,6 +1,6 @@
 {
   "buildCommand": "pnpm build:web",
-  "outputDirectory": "web-build",
+  "outputDirectory": "dist",
   "devCommand": "pnpm web",
   "installCommand": "pnpm install",
   "framework": null,
