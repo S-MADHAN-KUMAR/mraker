@@ -9,7 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { supabase } from '@/lib/supabase';
 import { Colors, FontFamily, type ThemeColorSet } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppSelector } from '@/store/hooks';
 import { useModal } from '@/components/ui/modal';
 
 interface Expense {
@@ -34,7 +34,7 @@ export default function ExpensesScreen() {
   const screenWidth = Dimensions.get('window').width - 40; // Account for padding
   const { showModal } = useModal();
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
+  const colorScheme = useAppSelector((state) => state.theme.colorScheme);
   const palette = Colors[colorScheme ?? 'dark'];
   const styles = useMemo(() => createStyles(palette, screenWidth, insets.top, insets.bottom), [palette, screenWidth, insets.top, insets.bottom]);
 

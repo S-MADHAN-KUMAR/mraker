@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppSelector } from '@/store/hooks';
 
 // Tab image mappings
 const TAB_IMAGES = {
@@ -20,7 +20,7 @@ const TAB_IMAGES = {
 } as const;
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const colorScheme = useAppSelector((state) => state.theme.colorScheme);
   const palette = Colors[colorScheme ?? 'dark'];
   const insets = useSafeAreaInsets();
 
@@ -82,9 +82,13 @@ export default function TabLayout() {
           borderTopLeftRadius: 46,
           borderTopRightRadius: 46,
           paddingHorizontal: 8,
-          backgroundColor: 'black',
+          backgroundColor: palette.card,
           borderTopWidth: 0,
           elevation: 0,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
         },
       })}>
       <Tabs.Screen

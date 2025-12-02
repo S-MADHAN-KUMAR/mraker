@@ -9,7 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { supabase } from '@/lib/supabase';
 import { Colors, FontFamily, type ThemeColorSet } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppSelector } from '@/store/hooks';
 import { useModal } from '@/components/ui/modal';
 
 interface WorkEntry {
@@ -39,7 +39,7 @@ export default function WorkTrackerScreen() {
   const [screenshots, setScreenshots] = useState<string[]>([]);
   const { showModal } = useModal();
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
+  const colorScheme = useAppSelector((state) => state.theme.colorScheme);
   const palette = Colors[colorScheme ?? 'dark'];
   const styles = useMemo(() => createStyles(palette, insets.top, insets.bottom), [palette, insets.top, insets.bottom]);
 

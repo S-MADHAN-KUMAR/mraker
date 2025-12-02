@@ -14,10 +14,12 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { Provider } from 'react-redux';
 import { ModalProvider } from '@/components/ui/modal';
 import { Colors } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { store } from '@/store';
+import { useAppSelector } from '@/store/hooks';
 
 // Prevent splash screen from auto-hiding
 if (SplashScreen?.preventAutoHideAsync) {
@@ -54,11 +56,11 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const isDark = (colorScheme ?? 'dark') === 'dark';
+function RootLayoutContent() {
+  const colorScheme = useAppSelector((state) => state.theme.colorScheme);
+  const isDark = colorScheme === 'dark';
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
     Poppins_600SemiBold,
@@ -70,9 +72,18 @@ export default function RootLayout() {
     if (fontsLoaded && SplashScreen?.hideAsync) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+    // If fonts fail to load, still hide splash screen after a timeout
+    if (fontError) {
+      console.warn('Font loading error:', fontError);
+      if (SplashScreen?.hideAsync) {
+        SplashScreen.hideAsync();
+      }
+    }
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) {
+  // Show splash screen while fonts are loading
+  // Continue even if fonts fail (will use system fonts as fallback)
+  if (!fontsLoaded && !fontError) {
     return null;
   }
 
@@ -111,5 +122,13 @@ export default function RootLayout() {
         </ThemeProvider>
       </AuthProvider>
     </SafeAreaProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <Provider store={store}>
+      <RootLayoutContent />
+    </Provider>
   );
 }

@@ -10,7 +10,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 import { Colors, Gradients, type ThemeColorSet } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppSelector } from '@/store/hooks';
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -18,7 +18,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [fingerprintAvailable, setFingerprintAvailable] = useState(false);
   const { login, loginWithFingerprint } = useAuth();
-  const colorScheme = useColorScheme();
+  const colorScheme = useAppSelector((state) => state.theme.colorScheme);
   const palette = Colors[colorScheme ?? 'dark'];
   const styles = useMemo(() => createStyles(palette), [palette]);
 

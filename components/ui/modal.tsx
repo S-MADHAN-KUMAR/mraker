@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, FontFamily, type ThemeColorSet } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppSelector } from '@/store/hooks';
 
 interface ModalContextType {
   showModal: (config: ModalConfig) => void;
@@ -27,7 +27,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   const [visible, setVisible] = useState(false);
   const [config, setConfig] = useState<ModalConfig | null>(null);
   const [scaleAnim] = useState(new Animated.Value(0));
-  const colorScheme = useColorScheme();
+  const colorScheme = useAppSelector((state) => state.theme.colorScheme);
   const palette = Colors[colorScheme ?? 'dark'];
 
   const showModal = (modalConfig: ModalConfig) => {

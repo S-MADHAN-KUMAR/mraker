@@ -13,7 +13,16 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { supabase } from '@/lib/supabase';
 import { Colors, FontFamily, type ThemeColorSet } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { 
+  setPrayers, 
+  setLoading, 
+  setUpdating, 
+  setGlobalRingtone, 
+  updatePrayer, 
+  togglePrayerEnabled 
+} from '@/store/prayerSlice';
+import { toggleTheme } from '@/store/themeSlice';
 
 interface PrayerReminder {
   id: string;
@@ -33,17 +42,17 @@ Notifications.setNotificationHandler({
 });
 
 export default function PrayersScreen() {
-  const [prayers, setPrayers] = useState<PrayerReminder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
+  const dispatch = useAppDispatch();
+  const { prayers, loading, updating, globalRingtone } = useAppSelector((state) => state.prayers);
+  const colorScheme = useAppSelector((state) => state.theme.colorScheme);
+  const palette = Colors[colorScheme ?? 'dark'];
+  const styles = useMemo(() => createStyles(palette), [palette]);
+
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showTimePicker, setShowTimePicker] = useState<string | null>(null);
   const [pickingTime, setPickingTime] = useState<string | null>(null);
-  const [globalRingtone, setGlobalRingtone] = useState<string | null>(null);
-  const colorScheme = useColorScheme();
-  const palette = Colors[colorScheme ?? 'dark'];
-  const styles = useMemo(() => createStyles(palette), [palette]);
+  const [changingTimeId, setChangingTimeId] = useState<string | null>(null);
 
   const scheduleNotifications = useCallback(async () => {
     if (Platform.OS === 'web') return;
@@ -115,7 +124,7 @@ export default function PrayersScreen() {
 
   const fetchPrayers = async () => {
     try {
-      setLoading(true);
+      dispatch(setLoading(true));
       const { data, error } = await supabase
         .from('prayer_reminders')
         .select('*')
@@ -123,17 +132,16 @@ export default function PrayersScreen() {
 
       if (error) throw error;
 
-      setPrayers(data || []);
+      dispatch(setPrayers(data || []));
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to fetch prayer reminders');
     } finally {
-      setLoading(false);
+      dispatch(setLoading(false));
     }
   };
 
   const fetchGlobalRingtone = async () => {
     try {
-      // Fetch global ringtone from settings or use first prayer's ringtone
       const { data, error } = await supabase
         .from('prayer_reminders')
         .select('ringtone_uri')
@@ -141,7 +149,7 @@ export default function PrayersScreen() {
         .single();
 
       if (!error && data?.ringtone_uri) {
-        setGlobalRingtone(data.ringtone_uri);
+        dispatch(setGlobalRingtone(data.ringtone_uri));
       }
     } catch (error) {
       // Ignore if no ringtone found
@@ -150,7 +158,9 @@ export default function PrayersScreen() {
 
   const handleTimeChange = async (id: string, newTime: string) => {
     try {
-      setUpdating(id);
+      dispatch(setUpdating(id));
+      setChangingTimeId(id);
+      
       const { error } = await supabase
         .from('prayer_reminders')
         .update({ time: newTime })
@@ -158,13 +168,17 @@ export default function PrayersScreen() {
 
       if (error) throw error;
 
-      fetchPrayers();
+      // Update Redux state directly without refetching
+      dispatch(updatePrayer({ id, time: newTime }));
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update prayer time');
+      // Refetch on error
+      fetchPrayers();
     } finally {
-      setUpdating(null);
+      dispatch(setUpdating(null));
       setShowTimePicker(null);
       setPickingTime(null);
+      setChangingTimeId(null);
     }
   };
 
@@ -191,19 +205,30 @@ export default function PrayersScreen() {
 
   const handleToggleEnabled = async (id: string, enabled: boolean) => {
     try {
-      setUpdating(id);
+      dispatch(setUpdating(id));
+      
+      // Optimistically update Redux state first
+      dispatch(togglePrayerEnabled(id));
+      
       const { error } = await supabase
         .from('prayer_reminders')
         .update({ enabled: !enabled })
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        // Revert on error
+        dispatch(togglePrayerEnabled(id));
+        throw error;
+      }
 
-      fetchPrayers();
+      // Schedule notifications without refetching
+      await scheduleNotifications();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update prayer reminder');
+      // Refetch on error
+      fetchPrayers();
     } finally {
-      setUpdating(null);
+      dispatch(setUpdating(null));
     }
   };
 
@@ -217,7 +242,7 @@ export default function PrayersScreen() {
       if (result.canceled) return;
 
       const uri = result.assets[0].uri;
-      setGlobalRingtone(uri);
+      dispatch(setGlobalRingtone(uri));
 
       // Update all prayers with the global ringtone
       const { error } = await supabase
@@ -230,26 +255,6 @@ export default function PrayersScreen() {
       fetchPrayers();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to set global ringtone');
-    }
-  };
-
-  const testGlobalRingtone = async () => {
-    try {
-      if (sound) {
-        await sound.unloadAsync();
-      }
-
-      if (globalRingtone) {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: globalRingtone },
-          { shouldPlay: true }
-        );
-        setSound(newSound);
-      } else {
-        Alert.alert('Info', 'No global ringtone selected. Please set one first.');
-      }
-    } catch {
-      Alert.alert('Error', 'Could not play ringtone. Please select a valid audio file.');
     }
   };
 
@@ -278,14 +283,38 @@ export default function PrayersScreen() {
     return date;
   };
 
+  // Get the prayer that is currently changing time
+  const changingPrayer = changingTimeId ? prayers.find(p => p.id === changingTimeId) : null;
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: Colors.light.background, dark: Colors.dark.background }}
       headerImage={
         <View style={styles.headerContainer}>
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity
+              style={styles.themeToggleButton}
+              onPress={() => dispatch(toggleTheme())}>
+              <IconSymbol 
+                size={20} 
+                name={colorScheme === 'dark' ? 'sun.max.fill' : 'moon.fill'} 
+                color={palette.text} 
+              />
+            </TouchableOpacity>
+          </View>
           <View style={styles.timeDisplayContainer}>
             <ThemedText style={styles.timeLabel}>Current Time</ThemedText>
             <ThemedText style={styles.currentTime}>{formatCurrentTime()}</ThemedText>
+            {changingPrayer && (
+              <View style={styles.changingTimeContainer}>
+                <ThemedText style={styles.changingTimeLabel}>
+                  Changing: {changingPrayer.prayer_name}
+                </ThemedText>
+                <ThemedText style={styles.changingTimeValue}>
+                  {formatTime(changingPrayer.time)}
+                </ThemedText>
+              </View>
+            )}
           </View>
         </View>
       }>
@@ -314,22 +343,12 @@ export default function PrayersScreen() {
             </ThemedText>
           </View>
 
-          <View style={styles.globalRingtoneButtons}>
-            <TouchableOpacity
-              style={styles.globalRingtoneButton}
-              onPress={handleSetGlobalRingtone}>
-              <IconSymbol size={16} name="folder.fill" color="#1e40af" />
-              <ThemedText style={styles.globalRingtoneButtonText}>Set Ringtone</ThemedText>
-            </TouchableOpacity>
-            {globalRingtone && (
-              <TouchableOpacity
-                style={styles.globalRingtoneButton}
-                onPress={testGlobalRingtone}>
-                <IconSymbol size={16} name="play.fill" color="#059669" />
-                <ThemedText style={styles.globalRingtoneButtonText}>Test</ThemedText>
-              </TouchableOpacity>
-            )}
-          </View>
+          <TouchableOpacity
+            style={styles.globalRingtoneButton}
+            onPress={handleSetGlobalRingtone}>
+            <IconSymbol size={16} name="folder.fill" color="#1e40af" />
+            <ThemedText style={styles.globalRingtoneButtonText}>Set Ringtone</ThemedText>
+          </TouchableOpacity>
         </ThemedView>
       </Animated.View>
 
@@ -427,6 +446,27 @@ const createStyles = (palette: ThemeColorSet) =>
       justifyContent: 'flex-end',
       alignItems: 'center',
     },
+    headerTopRow: {
+      position: 'absolute',
+      top: 24,
+      right: 24,
+      zIndex: 10,
+    },
+    themeToggleButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: palette.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: palette.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
     timeDisplayContainer: {
       alignItems: 'center',
       gap: 8,
@@ -444,6 +484,29 @@ const createStyles = (palette: ThemeColorSet) =>
       color: palette.text,
       fontFamily: FontFamily.bold,
       letterSpacing: 1,
+    },
+    changingTimeContainer: {
+      marginTop: 16,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: palette.surface,
+      borderWidth: 1,
+      borderColor: palette.border,
+      alignItems: 'center',
+      gap: 4,
+    },
+    changingTimeLabel: {
+      fontSize: 11,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      color: palette.muted,
+      fontFamily: FontFamily.regular,
+    },
+    changingTimeValue: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.accent,
+      fontFamily: FontFamily.semiBold,
     },
     cardContainer: {
       marginBottom: 16,
@@ -501,12 +564,7 @@ const createStyles = (palette: ThemeColorSet) =>
       color: palette.muted,
       fontFamily: FontFamily.regular,
     },
-    globalRingtoneButtons: {
-      flexDirection: 'row',
-      gap: 12,
-    },
     globalRingtoneButton: {
-      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',

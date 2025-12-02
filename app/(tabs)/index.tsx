@@ -10,7 +10,7 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { supabase } from '@/lib/supabase';
 import { Colors, Gradients, FontFamily, type ThemeColorSet } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppSelector } from '@/store/hooks';
 import { useModal } from '@/components/ui/modal';
 
 const QUICK_PRESETS = ['150', '250', '500', '1000'];
@@ -21,7 +21,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const { showModal } = useModal();
-  const colorScheme = useColorScheme();
+  const colorScheme = useAppSelector((state) => state.theme.colorScheme);
   const palette = Colors[colorScheme ?? 'dark'];
   const styles = useMemo(() => createStyles(palette), [palette]);
 
