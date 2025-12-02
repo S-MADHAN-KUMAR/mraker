@@ -73,9 +73,13 @@ export default function LoginScreen() {
     }
   };
 
+  const gradientColors = colorScheme === 'light' 
+    ? Gradients.lightPurple 
+    : Gradients.midnight;
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <LinearGradient colors={Gradients.midnight} style={styles.gradient}>
+      <LinearGradient colors={gradientColors} style={styles.gradient}>
         <Animated.View entering={FadeInDown.duration(600)} style={styles.hero}>
           <View>
             <ThemedText style={styles.heroEyebrow}>Secure workspace</ThemedText>
@@ -153,10 +157,6 @@ export default function LoginScreen() {
             </>
           )}
         </Animated.View>
-
-        <ThemedView style={styles.info}>
-          <ThemedText style={styles.infoText}>Default credentials: ejaz / 123</ThemedText>
-        </ThemedView>
       </LinearGradient>
     </KeyboardAvoidingView>
   );

@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform, View, Text } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform, View, Text, TextInput } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -38,7 +39,23 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
+});
+
+// Set notification categories with actions
+Notifications.setNotificationCategoryAsync('prayer_alarm', [
+  {
+    identifier: 'STOP_ALARM',
+    buttonTitle: 'Stop Alarm',
+    options: {
+      opensAppToForeground: false,
+    },
+  },
+], {
+  intentIdentifiers: [],
+  categorySummaryFormat: '%u more notifications',
 });
 
 export default function PrayersScreen() {
@@ -49,10 +66,44 @@ export default function PrayersScreen() {
   const styles = useMemo(() => createStyles(palette), [palette]);
 
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [playingSound, setPlayingSound] = useState<Audio.Sound | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [showTimePicker, setShowTimePicker] = useState<string | null>(null);
-  const [pickingTime, setPickingTime] = useState<string | null>(null);
-  const [changingTimeId, setChangingTimeId] = useState<string | null>(null);
+  const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
+  const [timeInput, setTimeInput] = useState('');
+  const [isPM, setIsPM] = useState(false);
+  const [showManualTimePicker, setShowManualTimePicker] = useState(false);
+  const [manualTime, setManualTime] = useState(new Date());
+  const [activeAlarmId, setActiveAlarmId] = useState<string | null>(null);
+
+  const playAlarmSound = useCallback(async (ringtoneUri: string | null) => {
+    try {
+      // Stop any currently playing sound
+      if (playingSound) {
+        await playingSound.stopAsync();
+        await playingSound.unloadAsync();
+      }
+
+      if (ringtoneUri) {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: ringtoneUri },
+          { shouldPlay: true, isLooping: true, volume: 1.0 }
+        );
+        setPlayingSound(newSound);
+      }
+      // If no ringtone, notification sound will play automatically
+    } catch (error) {
+      console.error('Error playing alarm sound:', error);
+    }
+  }, [playingSound]);
+
+  const stopAlarm = useCallback(async () => {
+    if (playingSound) {
+      await playingSound.stopAsync();
+      await playingSound.unloadAsync();
+      setPlayingSound(null);
+    }
+    setActiveAlarmId(null);
+  }, [playingSound]);
 
   const scheduleNotifications = useCallback(async () => {
     if (Platform.OS === 'web') return;
@@ -63,18 +114,24 @@ export default function PrayersScreen() {
       if (!prayer.enabled) return;
 
       const [hours, minutes] = prayer.time.split(':').map(Number);
-      const trigger = {
+      const trigger: Notifications.DailyTriggerInput = {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: hours,
         minute: minutes,
-        repeats: true,
       };
 
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: `Prayer Time: ${prayer.prayer_name}`,
-          body: `It's time for ${prayer.prayer_name} prayer`,
-          sound: globalRingtone ? true : true,
-          priority: Notifications.AndroidNotificationPriority.HIGH,
+          title: `⏰ Prayer Time: ${prayer.prayer_name}`,
+          body: `It's time for ${prayer.prayer_name} prayer. Tap to stop alarm.`,
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          data: {
+            prayerId: prayer.id,
+            prayerName: prayer.prayer_name,
+            ringtoneUri: prayer.ringtone_uri || globalRingtone,
+            categoryId: 'prayer_alarm',
+          },
         },
         trigger,
       });
@@ -86,13 +143,62 @@ export default function PrayersScreen() {
     fetchPrayers();
     fetchGlobalRingtone();
     
+    // Set up notification response listener
+    const notificationResponseSubscription = Notifications.addNotificationResponseReceivedListener(
+      async (response) => {
+        const { actionIdentifier, notification } = response;
+        const categoryId = notification.request.content.data?.categoryId;
+        
+        if ((actionIdentifier === 'STOP_ALARM' || actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) && categoryId === 'prayer_alarm') {
+          const prayerId = notification.request.content.data?.prayerId as string;
+          if (prayerId) {
+            await stopAlarm();
+            // Dismiss the notification
+            try {
+              await Notifications.dismissNotificationAsync(notification.request.identifier);
+            } catch (error) {
+              // Ignore dismiss errors
+            }
+          }
+        }
+      }
+    );
+
+    // Set up notification received listener (when app is in foreground)
+    const notificationReceivedSubscription = Notifications.addNotificationReceivedListener(
+      async (notification) => {
+        const categoryId = notification.request.content.data?.categoryId;
+        if (categoryId === 'prayer_alarm') {
+          const prayerId = notification.request.content.data?.prayerId as string;
+          const ringtoneUri = notification.request.content.data?.ringtoneUri as string | null;
+          
+          if (prayerId) {
+            setActiveAlarmId(prayerId);
+            // Start playing alarm sound
+            if (ringtoneUri) {
+              await playAlarmSound(ringtoneUri);
+            } else if (globalRingtone) {
+              await playAlarmSound(globalRingtone);
+            }
+          }
+        }
+      }
+    );
+    
     // Update current time every second
     const timeInterval = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
 
-    return () => clearInterval(timeInterval);
-  }, []);
+    return () => {
+      clearInterval(timeInterval);
+      notificationResponseSubscription.remove();
+      notificationReceivedSubscription.remove();
+      if (playingSound) {
+        playingSound.unloadAsync();
+      }
+    };
+  }, [playAlarmSound, stopAlarm, globalRingtone]);
 
   useEffect(() => {
     if (prayers.length > 0) {
@@ -100,13 +206,17 @@ export default function PrayersScreen() {
     }
   }, [scheduleNotifications, prayers.length]);
 
+
   useEffect(() => {
     return () => {
       if (sound) {
         sound.unloadAsync();
       }
+      if (playingSound) {
+        playingSound.unloadAsync();
+      }
     };
-  }, [sound]);
+  }, [sound, playingSound]);
 
   const requestPermissions = async () => {
     if (Platform.OS !== 'web') {
@@ -159,7 +269,9 @@ export default function PrayersScreen() {
   const handleTimeChange = async (id: string, newTime: string) => {
     try {
       dispatch(setUpdating(id));
-      setChangingTimeId(id);
+      
+      // Update Redux state FIRST for immediate UI feedback
+      dispatch(updatePrayer({ id, time: newTime }));
       
       const { error } = await supabase
         .from('prayer_reminders')
@@ -167,40 +279,90 @@ export default function PrayersScreen() {
         .eq('id', id);
 
       if (error) throw error;
-
-      // Update Redux state directly without refetching
-      dispatch(updatePrayer({ id, time: newTime }));
+      
+      // Clear editing state
+      setEditingTimeId(null);
+      setTimeInput('');
+      setIsPM(false);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update prayer time');
-      // Refetch on error
-      fetchPrayers();
+      await fetchPrayers();
+      setEditingTimeId(null);
+      setTimeInput('');
+      setIsPM(false);
     } finally {
       dispatch(setUpdating(null));
-      setShowTimePicker(null);
-      setPickingTime(null);
-      setChangingTimeId(null);
     }
   };
 
-  const handleTimePickerChange = (event: any, selectedDate?: Date) => {
+  const convertTo12Hour = (time24: string): { time: string; isPM: boolean } => {
+    const [hours, minutes] = time24.split(':').map(Number);
+    const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    const isPM = hours >= 12;
+    return { time: `${hour12}:${minutes.toString().padStart(2, '0')}`, isPM };
+  };
+
+  const convertTo24Hour = (time12: string, isPM: boolean): string => {
+    const [hours, minutes] = time12.split(':').map(Number);
+    let hour24 = hours;
+    if (isPM && hours !== 12) {
+      hour24 = hours + 12;
+    } else if (!isPM && hours === 12) {
+      hour24 = 0;
+    }
+    return `${hour24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+
+  const handleEditTime = (id: string, currentTime: string) => {
+    setEditingTimeId(id);
+    const { time, isPM: pm } = convertTo12Hour(currentTime);
+    setTimeInput(time);
+    setIsPM(pm);
+  };
+
+  const handleSaveTime = (id: string) => {
+    if (!timeInput) {
+      Alert.alert('Error', 'Please enter a time');
+      return;
+    }
+
+    // Validate time format (H:MM or HH:MM)
+    const timeRegex = /^([1-9]|1[0-2]):([0-5][0-9])$/;
+    if (!timeRegex.test(timeInput)) {
+      Alert.alert('Invalid Format', 'Please enter time in H:MM or HH:MM format (e.g., 6:30, 12:45)');
+      return;
+    }
+
+    const time24 = convertTo24Hour(timeInput, isPM);
+    handleTimeChange(id, time24);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTimeId(null);
+    setTimeInput('');
+    setIsPM(false);
+  };
+
+  const handleManualTimePickerChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
-      setShowTimePicker(null);
-    }
-
-    if (event.type === 'set' && selectedDate && pickingTime) {
-      const hours = selectedDate.getHours().toString().padStart(2, '0');
-      const minutes = selectedDate.getMinutes().toString().padStart(2, '0');
-      const timeString = `${hours}:${minutes}`;
-      handleTimeChange(pickingTime, timeString);
+      if (event.type === 'set' && selectedDate) {
+        setManualTime(selectedDate);
+        setCurrentTime(selectedDate);
+        setShowManualTimePicker(false);
+      } else if (event.type === 'dismissed') {
+        setShowManualTimePicker(false);
+      }
     } else {
-      setShowTimePicker(null);
-      setPickingTime(null);
+      // iOS
+      if (selectedDate) {
+        setManualTime(selectedDate);
+      }
     }
   };
 
-  const openTimePicker = (id: string, currentTime: string) => {
-    setPickingTime(id);
-    setShowTimePicker(id);
+  const handleIOSManualTimeDone = () => {
+    setCurrentTime(manualTime);
+    setShowManualTimePicker(false);
   };
 
   const handleToggleEnabled = async (id: string, enabled: boolean) => {
@@ -283,8 +445,6 @@ export default function PrayersScreen() {
     return date;
   };
 
-  // Get the prayer that is currently changing time
-  const changingPrayer = changingTimeId ? prayers.find(p => p.id === changingTimeId) : null;
 
   return (
     <ParallaxScrollView
@@ -302,20 +462,27 @@ export default function PrayersScreen() {
               />
             </TouchableOpacity>
           </View>
-          <View style={styles.timeDisplayContainer}>
-            <ThemedText style={styles.timeLabel}>Current Time</ThemedText>
-            <ThemedText style={styles.currentTime}>{formatCurrentTime()}</ThemedText>
-            {changingPrayer && (
-              <View style={styles.changingTimeContainer}>
-                <ThemedText style={styles.changingTimeLabel}>
-                  Changing: {changingPrayer.prayer_name}
-                </ThemedText>
-                <ThemedText style={styles.changingTimeValue}>
-                  {formatTime(changingPrayer.time)}
-                </ThemedText>
-              </View>
-            )}
-          </View>
+          {loading ? (
+            <View style={styles.headerLoadingContainer}>
+              <Image
+                source={require('@/assets/yapapa.gif')}
+                style={styles.headerLoaderGif}
+                contentFit="contain"
+              />
+              <ThemedText style={styles.headerLoadingText}>Loading prayers...</ThemedText>
+            </View>
+          ) : (
+            <View style={{}}>
+              <ThemedText style={styles.timeLabel}>Current Time</ThemedText>
+              <TouchableOpacity 
+                onPress={() => {
+                  setManualTime(currentTime);
+                  setShowManualTimePicker(true);
+                }}>
+                <ThemedText style={styles.currentTime}>{formatCurrentTime()}</ThemedText>  
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       }>
       
@@ -394,43 +561,115 @@ export default function PrayersScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.timePickerContainer}>
-                    <TouchableOpacity
-                      style={styles.timePickerButton}
-                      onPress={() => openTimePicker(prayer.id, prayer.time)}
-                      disabled={updating === prayer.id}>
-                      <IconSymbol size={18} name="clock" color={palette.text} />
-                      <ThemedText style={styles.timePickerText}>Change Time</ThemedText>
-                      <IconSymbol size={16} name="chevron.right" color={palette.muted} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {showTimePicker === prayer.id && Platform.OS === 'ios' && (
-                    <View style={styles.timePickerWrapper}>
-                      <DateTimePicker
-                        value={getTimeForPicker(prayer.time)}
-                        mode="time"
-                        is24Hour={false}
-                        display="spinner"
-                        onChange={handleTimePickerChange}
-                        style={styles.timePicker}
-                      />
+                  {editingTimeId === prayer.id ? (
+                    <View style={styles.timeEditContainer}>
+                      <View style={styles.timeInputGroup}>
+                        <ThemedText style={styles.timeInputLabel}>Time</ThemedText>
+                        <View style={styles.timeInputRow}>
+                          <TextInput
+                            style={styles.timeInput}
+                            value={timeInput}
+                            onChangeText={setTimeInput}
+                            placeholder="6:30"
+                            placeholderTextColor={palette.muted}
+                            keyboardType="numbers-and-punctuation"
+                            maxLength={5}
+                            autoFocus
+                          />
+                          <View style={styles.amPmToggleContainer}>
+                            <TouchableOpacity
+                              style={[styles.amPmButton, !isPM && styles.amPmButtonActive]}
+                              onPress={() => setIsPM(false)}>
+                              <ThemedText style={[styles.amPmText, !isPM && styles.amPmTextActive]}>AM</ThemedText>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.amPmButton, isPM && styles.amPmButtonActive]}
+                              onPress={() => setIsPM(true)}>
+                              <ThemedText style={[styles.amPmText, isPM && styles.amPmTextActive]}>PM</ThemedText>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        <ThemedText style={styles.timeInputHint}>12-hour format (e.g., 6:30 AM, 6:45 PM)</ThemedText>
+                      </View>
+                      <View style={styles.timeEditButtons}>
+                        <TouchableOpacity
+                          style={styles.timeEditCancelButton}
+                          onPress={handleCancelEdit}>
+                          <IconSymbol size={16} name="xmark.circle.fill" color={palette.text} />
+                          <ThemedText style={styles.timeEditCancelText}>Cancel</ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.timeEditSaveButton}
+                          onPress={() => handleSaveTime(prayer.id)}
+                          disabled={updating === prayer.id}>
+                          {updating === prayer.id ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <>
+                              <IconSymbol size={16} name="checkmark.circle.fill" color="#fff" />
+                              <ThemedText style={styles.timeEditSaveText}>Save</ThemedText>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  )}
-                  {showTimePicker === prayer.id && Platform.OS === 'android' && (
-                    <DateTimePicker
-                      value={getTimeForPicker(prayer.time)}
-                      mode="time"
-                      is24Hour={false}
-                      display="default"
-                      onChange={handleTimePickerChange}
-                    />
+                  ) : (
+                    <View style={styles.timePickerContainer}>
+                      <TouchableOpacity
+                        style={styles.timePickerButton}
+                        onPress={() => handleEditTime(prayer.id, prayer.time)}
+                        disabled={updating === prayer.id}>
+                        <IconSymbol size={18} name="clock" color={palette.text} />
+                        <ThemedText style={styles.timePickerText}>Change Time</ThemedText>
+                        <IconSymbol size={16} name="chevron.right" color={palette.muted} />
+                      </TouchableOpacity>
+                    </View>
                   )}
                 </ThemedView>
               </Animated.View>
             ))}
           </ScrollView>
         </Animated.View>
+      )}
+      
+      {/* Manual time picker for top time display */}
+      {showManualTimePicker && Platform.OS === 'ios' && (
+        <View style={styles.manualTimePickerOverlay}>
+          <View style={styles.manualTimePickerContainer}>
+            <View style={styles.manualTimePickerHeader}>
+              <ThemedText style={styles.manualTimePickerTitle}>Set Current Time</ThemedText>
+            </View>
+            <DateTimePicker
+              value={manualTime}
+              mode="time"
+              is24Hour={false}
+              display="spinner"
+              onChange={handleManualTimePickerChange}
+              style={styles.timePicker}
+            />
+            <View style={styles.manualTimePickerButtons}>
+              <TouchableOpacity
+                style={styles.manualTimePickerCancelButton}
+                onPress={() => setShowManualTimePicker(false)}>
+                <ThemedText style={styles.manualTimePickerCancelText}>Cancel</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.manualTimePickerDoneButton}
+                onPress={handleIOSManualTimeDone}>
+                <ThemedText style={styles.manualTimePickerDoneText}>Done</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+      {showManualTimePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={manualTime}
+          mode="time"
+          is24Hour={false}
+          display="default"
+          onChange={handleManualTimePickerChange}
+        />
       )}
     </ParallaxScrollView>
   );
@@ -442,9 +681,10 @@ const createStyles = (palette: ThemeColorSet) =>
       width: '100%',
       height: '100%',
       padding: 24,
-      paddingBottom: 32,
+      paddingBottom: 40,
       justifyContent: 'flex-end',
       alignItems: 'center',
+      minHeight: 200,
     },
     headerTopRow: {
       position: 'absolute',
@@ -470,6 +710,8 @@ const createStyles = (palette: ThemeColorSet) =>
     timeDisplayContainer: {
       alignItems: 'center',
       gap: 8,
+      width: '100%',
+      paddingVertical: 8,
     },
     timeLabel: {
       fontSize: 12,
@@ -479,14 +721,33 @@ const createStyles = (palette: ThemeColorSet) =>
       fontFamily: FontFamily.semiBold,
     },
     currentTime: {
-      fontSize: 32,
+      fontSize: 42,
       fontWeight: '700',
       color: palette.text,
       fontFamily: FontFamily.bold,
-      letterSpacing: 1,
+      letterSpacing: 0.5,
+      textAlign: 'center',
+      width: '100%',
+    },
+    stopAlarmButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginTop: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      backgroundColor: '#ef4444',
+    },
+    stopAlarmText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#fff',
+      fontFamily: FontFamily.semiBold,
     },
     changingTimeContainer: {
-      marginTop: 16,
+      marginTop: 12,
       padding: 12,
       borderRadius: 12,
       backgroundColor: palette.surface,
@@ -494,6 +755,8 @@ const createStyles = (palette: ThemeColorSet) =>
       borderColor: palette.border,
       alignItems: 'center',
       gap: 4,
+      width: '100%',
+      maxWidth: 300,
     },
     changingTimeLabel: {
       fontSize: 11,
@@ -501,12 +764,29 @@ const createStyles = (palette: ThemeColorSet) =>
       letterSpacing: 1,
       color: palette.muted,
       fontFamily: FontFamily.regular,
+      textAlign: 'center',
     },
     changingTimeValue: {
       fontSize: 18,
+      textAlign: 'center',
       fontWeight: '600',
       color: palette.accent,
       fontFamily: FontFamily.semiBold,
+    },
+    headerLoadingContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      width: '100%',
+    },
+    headerLoaderGif: {
+      width: 100,
+      height: 100,
+    },
+    headerLoadingText: {
+      fontSize: 14,
+      color: palette.muted,
+      fontFamily: FontFamily.regular,
     },
     cardContainer: {
       marginBottom: 16,
@@ -631,6 +911,7 @@ const createStyles = (palette: ThemeColorSet) =>
       color: palette.text,
       marginBottom: 2,
       fontFamily: FontFamily.semiBold,
+      textAlign: 'left', // Will be overridden by ThemedText for Arabic
     },
     prayerTimeDisplay: {
       fontSize: 13,
@@ -679,13 +960,171 @@ const createStyles = (palette: ThemeColorSet) =>
       color: palette.text,
       fontFamily: FontFamily.semiBold,
     },
-    timePickerWrapper: {
+    timeEditContainer: {
+      gap: 16,
       marginTop: 12,
+    },
+    timeInputGroup: {
+      gap: 8,
+    },
+    timeInputLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: palette.muted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      fontFamily: FontFamily.semiBold,
+    },
+    timeInputRow: {
+      flexDirection: 'row',
+      gap: 12,
+      alignItems: 'center',
+    },
+    timeInput: {
+      flex: 1,
+      borderWidth: 1.5,
+      borderColor: palette.border,
       borderRadius: 12,
-      overflow: 'hidden',
+      padding: 14,
+      fontSize: 16,
       backgroundColor: palette.surface,
+      color: palette.text,
+      fontFamily: FontFamily.medium,
+    },
+    amPmToggleContainer: {
+      flexDirection: 'row',
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+      overflow: 'hidden',
+    },
+    amPmButton: {
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    amPmButtonActive: {
+      backgroundColor: '#1e40af',
+    },
+    amPmText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: palette.text,
+      fontFamily: FontFamily.semiBold,
+    },
+    amPmTextActive: {
+      color: '#fff',
+    },
+    timeInputHint: {
+      fontSize: 11,
+      color: palette.muted,
+      fontFamily: FontFamily.regular,
+    },
+    timeEditButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    timeEditCancelButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+    },
+    timeEditCancelText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: palette.text,
+      fontFamily: FontFamily.semiBold,
+    },
+    timeEditSaveButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: '#1e40af',
+    },
+    timeEditSaveText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#fff',
+      fontFamily: FontFamily.semiBold,
     },
     timePicker: {
       height: 200,
+    },
+    manualTimePickerOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 1000,
+    },
+    manualTimePickerContainer: {
+      width: '90%',
+      maxWidth: 400,
+      backgroundColor: palette.card,
+      borderRadius: 20,
+      padding: 20,
+      borderWidth: 1,
+      borderColor: palette.border,
+    },
+    manualTimePickerHeader: {
+      marginBottom: 16,
+      alignItems: 'center',
+    },
+    manualTimePickerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: palette.text,
+      fontFamily: FontFamily.semiBold,
+    },
+    manualTimePickerButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingTop: 16,
+      gap: 12,
+    },
+    manualTimePickerCancelButton: {
+      flex: 1,
+      padding: 12,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+      alignItems: 'center',
+    },
+    manualTimePickerCancelText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: palette.text,
+      fontFamily: FontFamily.semiBold,
+    },
+    manualTimePickerDoneButton: {
+      flex: 1,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: '#1e40af',
+      alignItems: 'center',
+    },
+    manualTimePickerDoneText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: '#fff',
+      fontFamily: FontFamily.semiBold,
     },
   });

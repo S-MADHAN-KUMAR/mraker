@@ -41,6 +41,8 @@ export default function SavingsScreen() {
   const [totalSavings, setTotalSavings] = useState(0);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const { showModal } = useModal();
@@ -135,6 +137,74 @@ export default function SavingsScreen() {
     }
   };
 
+  const handleEditSavings = () => {
+    if (thisMonthSavings) {
+      setAmount(thisMonthSavings.amount.toString());
+      setDescription(thisMonthSavings.description || '');
+      setEditing(true);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setAmount('');
+    setDescription('');
+  };
+
+  const handleUpdateSavings = async () => {
+    if (!amount) {
+      showModal({
+        title: 'Error',
+        message: 'Please enter an amount',
+        type: 'error',
+      });
+      return;
+    }
+
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      showModal({
+        title: 'Error',
+        message: 'Please enter a valid amount',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (!thisMonthSavings) return;
+
+    try {
+      setUpdating(true);
+      const { error } = await supabase
+        .from('savings')
+        .update({
+          amount: amountNum,
+          description: description || null,
+        })
+        .eq('id', thisMonthSavings.id);
+
+      if (error) throw error;
+
+      showModal({
+        title: 'Success',
+        message: 'Savings updated successfully!',
+        type: 'success',
+      });
+      setEditing(false);
+      setAmount('');
+      setDescription('');
+      fetchSavings();
+    } catch (error: any) {
+      showModal({
+        title: 'Error',
+        message: error.message || 'Failed to update savings',
+        type: 'error',
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const thisMonthSavings = savings.find(
     entry => entry.month === currentMonth && entry.year === currentYear
   );
@@ -191,9 +261,17 @@ export default function SavingsScreen() {
               <ActivityIndicator color={palette.accent} size="small" />
               <ThemedText style={styles.loadingText}>Loading...</ThemedText>
             </View>
-          ) : hasThisMonthEntry ? (
+          ) : hasThisMonthEntry && !editing ? (
             <View style={styles.monthAmountContainer}>
-              <ThemedText style={styles.monthAmountLabel}>Saved this month</ThemedText>
+              <View style={styles.monthAmountHeader}>
+                <ThemedText style={styles.monthAmountLabel}>Saved this month</ThemedText>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={handleEditSavings}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <IconSymbol size={18} name="pencil.circle.fill" color={palette.accent} />
+                </TouchableOpacity>
+              </View>
               <ThemedText style={styles.monthAmountValue}>₹{thisMonthAmount.toFixed(2)}</ThemedText>
               {thisMonthSavings?.description && (
                 <ThemedText style={styles.monthDescription}>{thisMonthSavings.description}</ThemedText>
@@ -226,25 +304,38 @@ export default function SavingsScreen() {
                 />
               </View>
 
-              <TouchableOpacity
-                style={[styles.submitButton, adding && styles.submitButtonDisabled]}
-                disabled={adding}
-                onPress={handleAddSavings}>
-                <LinearGradient
-                  colors={['#1e40af', '#059669']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.submitButtonGradient}>
-                  {adding ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <>
-                      <IconSymbol size={18} name="checkmark.circle.fill" color="#fff" />
-                      <ThemedText style={styles.submitButtonText}>Save Amount</ThemedText>
-                    </>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
+              <View style={styles.formButtons}>
+                {editing && (
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={handleCancelEdit}
+                    disabled={updating}>
+                    <IconSymbol size={18} name="xmark.circle.fill" color={palette.text} />
+                    <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.submitButton, (adding || updating) && styles.submitButtonDisabled]}
+                  disabled={adding || updating}
+                  onPress={editing ? handleUpdateSavings : handleAddSavings}>
+                  <LinearGradient
+                    colors={['#1e40af', '#059669']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.submitButtonGradient}>
+                    {(adding || updating) ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <IconSymbol size={18} name="checkmark.circle.fill" color="#fff" />
+                        <ThemedText style={styles.submitButtonText}>
+                          {editing ? 'Update Amount' : 'Save Amount'}
+                        </ThemedText>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </ThemedView>
@@ -360,10 +451,18 @@ const createStyles = (palette: ThemeColorSet, topInset: number) =>
     monthAmountContainer: {
       gap: 8,
     },
+    monthAmountHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
     monthAmountLabel: {
       fontSize: 13,
       color: palette.muted,
       fontFamily: FontFamily.regular,
+    },
+    editButton: {
+      padding: 4,
     },
     monthAmountValue: {
       fontSize: 28,
@@ -379,6 +478,29 @@ const createStyles = (palette: ThemeColorSet, topInset: number) =>
     },
     formContainer: {
       gap: 16,
+    },
+    formButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 8,
+    },
+    cancelButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 16,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+    },
+    cancelButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: palette.text,
+      fontFamily: FontFamily.semiBold,
     },
     inputGroup: {
       gap: 8,

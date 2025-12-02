@@ -62,6 +62,10 @@ export const Gradients = {
   oceanic: ['#022C43', '#053F5C', '#1F6F8B'],
   citrus: ['#FF7E5F', '#FD3A84', '#7F00FF'],
   midnight: ['#030711', '#0F172A', '#1E1B4B'],
+  // Light theme gradients
+  light: ['#F5F7FB', '#E8EDF5', '#D1DBE8'],
+  lightBlue: ['#E0F2FE', '#BAE6FD', '#7DD3FC'],
+  lightPurple: ['#F3E8FF', '#E9D5FF', '#DDD6FE'],
 } as const;
 
 export type ThemeColorSet = typeof baseLight;

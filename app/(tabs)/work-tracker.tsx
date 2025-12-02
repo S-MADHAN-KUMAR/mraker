@@ -32,6 +32,9 @@ export default function WorkTrackerScreen() {
   const [workEntries, setWorkEntries] = useState<WorkEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<WorkEntry | null>(null);
+  const [updating, setUpdating] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [projectName, setProjectName] = useState('');
@@ -183,6 +186,65 @@ export default function WorkTrackerScreen() {
     }
   };
 
+  const handleEditWork = (entry: WorkEntry) => {
+    setEditingEntry(entry);
+    setProjectName(entry.project_name);
+    setTask(entry.task);
+    setScreenshots(entry.screenshots || []);
+    setEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditingEntry(null);
+    setProjectName('');
+    setTask('');
+    setScreenshots([]);
+  };
+
+  const handleUpdateWork = async () => {
+    if (!projectName || !task) {
+      showModal({
+        title: 'Error',
+        message: 'Please fill in project name and task',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (!editingEntry) return;
+
+    try {
+      setUpdating(true);
+      const { error } = await supabase
+        .from('work_tracker')
+        .update({
+          project_name: projectName,
+          task: task,
+          screenshots: screenshots,
+        })
+        .eq('id', editingEntry.id);
+
+      if (error) throw error;
+
+      showModal({
+        title: 'Success',
+        message: 'Work entry updated successfully!',
+        type: 'success',
+      });
+      handleCancelEdit();
+      fetchWorkEntries();
+    } catch (error: any) {
+      showModal({
+        title: 'Error',
+        message: error.message || 'Failed to update work entry',
+        type: 'error',
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleDeleteWork = async (id: string) => {
     showModal({
       title: 'Delete Work Entry',
@@ -217,13 +279,14 @@ export default function WorkTrackerScreen() {
 
   const screenshotCount = workEntries.reduce((sum, entry) => sum + (entry.screenshots?.length ?? 0), 0);
 
-  // Check if there's already an entry for the current month and year
+  // Check if there's already an entry for today
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
-  const hasCurrentMonthEntry = workEntries.some(entry => {
-    const entryDate = new Date(entry.date);
-    return entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear;
-  });
+  const today = new Date();
+  const todayDateString = today.toISOString().split('T')[0];
+  
+  const todayEntry = workEntries.find(entry => entry.date === todayDateString);
+  const hasTodayEntry = !!todayEntry;
 
   return (
     <ScrollView
@@ -259,20 +322,27 @@ export default function WorkTrackerScreen() {
         </ThemedView>
       </Animated.View>
 
-      {/* Add Work Form - Only show if no entry exists for current month */}
-      {!hasCurrentMonthEntry && (
+      {/* Add/Edit Work Form */}
+      {(!hasTodayEntry || editing) && (
         <Animated.View entering={FadeInDown.delay(120).duration(500)} style={styles.cardContainer}>
           <ThemedView style={styles.formCard}>
           <View style={styles.formHeader}>
             <View style={styles.formHeaderLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: '#05966915' }]}>
-                <IconSymbol size={20} name="plus.circle.fill" color="#059669" />
+              <View style={[styles.iconContainer, { backgroundColor: editing ? '#1e40af15' : '#05966915' }]}>
+                <IconSymbol size={20} name={editing ? 'pencil.circle.fill' : 'plus.circle.fill'} color={editing ? '#1e40af' : '#059669'} />
               </View>
               <View>
-                <ThemedText style={styles.formTitle}>Add Work Entry</ThemedText>
-                <ThemedText style={styles.formSubtitle}>Record your daily work progress</ThemedText>
+                <ThemedText style={styles.formTitle}>{editing ? 'Edit Work Entry' : 'Add Work Entry'}</ThemedText>
+                <ThemedText style={styles.formSubtitle}>{editing ? 'Update your work progress' : 'Record your daily work progress'}</ThemedText>
               </View>
             </View>
+            {editing && (
+              <TouchableOpacity
+                style={styles.cancelEditButton}
+                onPress={handleCancelEdit}>
+                <IconSymbol size={18} name="xmark.circle.fill" color={palette.muted} />
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -332,25 +402,38 @@ export default function WorkTrackerScreen() {
             )}
           </View>
 
-          <TouchableOpacity
-            style={[styles.submitButton, adding && styles.submitButtonDisabled]}
-            onPress={handleAddWork}
-            disabled={adding}>
-            <LinearGradient
-              colors={['#1e40af', '#059669']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.submitButtonGradient}>
-              {adding ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <>
-                  <IconSymbol size={18} name="checkmark.circle.fill" color="#fff" />
-                  <ThemedText style={styles.submitButtonText}>Add Work Entry</ThemedText>
-                </>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
+          <View style={styles.formActions}>
+            {editing && (
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCancelEdit}
+                disabled={updating}>
+                <IconSymbol size={18} name="xmark.circle.fill" color={palette.text} />
+                <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.submitButton, (adding || updating) && styles.submitButtonDisabled]}
+              onPress={editing ? handleUpdateWork : handleAddWork}
+              disabled={adding || updating}>
+              <LinearGradient
+                colors={['#1e40af', '#059669']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.submitButtonGradient}>
+                {(adding || updating) ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <IconSymbol size={18} name="checkmark.circle.fill" color="#fff" />
+                    <ThemedText style={styles.submitButtonText}>
+                      {editing ? 'Update Work Entry' : 'Add Work Entry'}
+                    </ThemedText>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </ThemedView>
       </Animated.View>
       )}
@@ -405,11 +488,22 @@ export default function WorkTrackerScreen() {
                         </ThemedText>
                       </View>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteWork(entry.id)}
-                      style={styles.deleteButton}>
-                      <IconSymbol size={18} name="trash.fill" color={palette.danger} />
-                    </TouchableOpacity>
+                    <View style={styles.entryActions}>
+                      {entry.date === todayDateString && (
+                        <TouchableOpacity
+                          onPress={() => handleEditWork(entry)}
+                          style={styles.editButton}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <IconSymbol size={18} name="pencil.circle.fill" color={palette.accent} />
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        onPress={() => handleDeleteWork(entry.id)}
+                        style={styles.deleteButton}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <IconSymbol size={18} name="trash.fill" color={palette.danger} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   <View style={styles.entryTaskContainer}>
@@ -419,7 +513,9 @@ export default function WorkTrackerScreen() {
                   {entry.screenshots && entry.screenshots.length > 0 && (
                     <ScrollView horizontal style={styles.entryScreenshots} showsHorizontalScrollIndicator={false}>
                       {entry.screenshots.map((uri, index) => (
-                        <Image key={index} source={{ uri }} style={styles.entryScreenshot} />
+                        <View key={index} style={styles.entryScreenshotContainer}>
+                          <Image source={{ uri }} style={styles.entryScreenshot} />
+                        </View>
                       ))}
                     </ScrollView>
                   )}
@@ -584,12 +680,19 @@ const createStyles = (palette: ThemeColorSet, topInset: number, bottomInset: num
       elevation: 2,
     },
     formHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
       marginBottom: 20,
     },
     formHeaderLeft: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
+      flex: 1,
+    },
+    cancelEditButton: {
+      padding: 4,
     },
     formTitle: {
       fontSize: 18,
@@ -659,6 +762,8 @@ const createStyles = (palette: ThemeColorSet, topInset: number, bottomInset: num
     screenshotItem: {
       marginRight: 12,
       position: 'relative',
+      width: 100,
+      height: 100,
     },
     screenshot: {
       width: 100,
@@ -669,16 +774,49 @@ const createStyles = (palette: ThemeColorSet, topInset: number, bottomInset: num
     },
     removeScreenshot: {
       position: 'absolute',
-      top: -6,
-      right: -6,
+      top: -8,
+      right: -8,
       backgroundColor: palette.danger,
-      borderRadius: 10,
-      padding: 2,
+      borderRadius: 12,
+      width: 24,
+      height: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: palette.card,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    formActions: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 8,
+    },
+    cancelButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 16,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+    },
+    cancelButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: palette.text,
+      fontFamily: FontFamily.semiBold,
     },
     submitButton: {
+      flex: 1,
       borderRadius: 12,
       overflow: 'hidden',
-      marginTop: 8,
     },
     submitButtonDisabled: {
       opacity: 0.6,
@@ -795,6 +933,14 @@ const createStyles = (palette: ThemeColorSet, topInset: number, bottomInset: num
       color: palette.muted,
       fontFamily: FontFamily.regular,
     },
+    entryActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    editButton: {
+      padding: 8,
+    },
     deleteButton: {
       padding: 8,
     },
@@ -810,12 +956,15 @@ const createStyles = (palette: ThemeColorSet, topInset: number, bottomInset: num
     entryScreenshots: {
       marginTop: 12,
     },
-    entryScreenshot: {
-      width: 100,
-      height: 100,
-      borderRadius: 8,
+    entryScreenshotContainer: {
       marginRight: 12,
-      borderWidth: 1,
+      position: 'relative',
+    },
+    entryScreenshot: {
+      width: 120,
+      height: 120,
+      borderRadius: 12,
+      borderWidth: 1.5,
       borderColor: palette.border,
     },
   });

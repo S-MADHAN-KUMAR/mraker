@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "scheme": "mraker",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "dark",
 
     "splash": {
@@ -28,7 +28,7 @@
     "android": {
       "package": "com.madhan.mraker",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
       }
     },

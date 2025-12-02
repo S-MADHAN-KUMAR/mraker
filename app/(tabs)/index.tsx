@@ -3,6 +3,7 @@ import { StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, View, Scrol
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
@@ -21,9 +22,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const { showModal } = useModal();
+  const insets = useSafeAreaInsets();
   const colorScheme = useAppSelector((state) => state.theme.colorScheme);
   const palette = Colors[colorScheme ?? 'dark'];
-  const styles = useMemo(() => createStyles(palette), [palette]);
+  const styles = useMemo(() => createStyles(palette, insets.top), [palette, insets.top]);
 
   useEffect(() => {
     fetchBalance();
@@ -126,9 +128,10 @@ export default function HomeScreen() {
         <View style={styles.headerContainer}>
           <View style={styles.headerContent}>
             <ThemedText type="title" style={styles.headerTitle}>
-              السلام عليكم
+            بِسْمِ اللهِ الرَّحْمٰنِ الرَّحِيْمِ
             </ThemedText>
           </View>
+          <Image source={require('@/assets/yapapa.gif')} style={styles.headerImage} />
         </View>
       }>
       
@@ -288,12 +291,13 @@ export default function HomeScreen() {
   );
 }
 
-const createStyles = (palette: ThemeColorSet) =>
+const createStyles = (palette: ThemeColorSet, topInset: number) =>
   StyleSheet.create({
     headerContainer: {
       width: '100%',
       height: '100%',
       padding: 24,
+      paddingTop: Math.max(topInset + 20, 24),
       paddingBottom: 32,
       justifyContent: 'center',
       alignItems: 'center',
@@ -302,6 +306,12 @@ const createStyles = (palette: ThemeColorSet) =>
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1,
+    },
+    headerImage: {
+      width: 100,
+      height: 100,
+      marginTop: 20,
+      borderRadius: 10,
     },
     headerTitle: {
       fontSize: 42,
