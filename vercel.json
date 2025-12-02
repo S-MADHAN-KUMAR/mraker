@@ -1,0 +1,14 @@
+{
+  "buildCommand": "pnpm build:web",
+  "outputDirectory": "web-build",
+  "devCommand": "pnpm web",
+  "installCommand": "pnpm install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+
